@@ -1,3 +1,4 @@
+import asyncio
 import os
 import pandas as pd
 from typing import Dict, Any, List
@@ -43,13 +44,39 @@ class ComplianceService:
 
     def load_checklist(self, file_path: str) -> pd.DataFrame:
         """Loads Excel checklist."""
-        self.checklist_df = pd.read_excel(file_path)
+        # Force all columns to be strings to avoid PyArrow inference issues
+        self.checklist_df = pd.read_excel(file_path, dtype=str)
+        # Replace "nan" strings with empty string if any
+        self.checklist_df = self.checklist_df.replace("nan", "")
+        
         # Add status columns if missing
         required_cols = ['AI_Proposal', 'Discussion_Log', 'Final_Answer', 'Status']
         for col in required_cols:
             if col not in self.checklist_df.columns:
                 self.checklist_df[col] = ""
         return self.checklist_df
+
+    def _get_or_create_session(self, user_id: str, session_id: str):
+        """Helper to ensure session exists."""
+        session = None
+        try:
+            # Check if session exists
+            session = asyncio.run(self.session_service.get_session(
+                app_name="agents", 
+                user_id=user_id, 
+                session_id=session_id
+            ))
+        except Exception:
+            pass
+            
+        if session is None:
+             # Create new session
+             asyncio.run(self.session_service.create_session(
+                app_name="agents", 
+                user_id=user_id, 
+                session_id=session_id,
+                state={"pdf_uri": self.pdf_uri}
+            ))
 
     def analyze_row(self, row_index: int, question: str) -> str:
         """
@@ -61,22 +88,9 @@ class ComplianceService:
         user_id = "user_default"
         session_id = f"session_row_{row_index}"
         
-        # Ensure session exists
-        try:
-            self.session_service.get_session("agents", user_id, session_id).blocking_get()
-        except:
-             self.session_service.create_session(
-                "agents", 
-                user_id, 
-                session_id,
-                state={"pdf_uri": self.pdf_uri} # Pass PDF context to agents via state if needed
-            ).blocking_get()
+        self._get_or_create_session(user_id, session_id)
 
         # Construct prompt
-        # We need to explicitly tell the Librarian to look at the PDF URI
-        # For V1, we might just inject the URI into the prompt or rely on the agent having access to the client
-        # Ideally, we attach the file to the request.
-        
         prompt = f"""
         Context Document URI: {self.pdf_uri}
         
@@ -87,9 +101,12 @@ class ComplianceService:
         
         content = types.Content(role='user', parts=[types.Part(text=prompt)])
         
-        # Run Synchronously for V1 simplicity (or async if Streamlit supports it well)
-        # ADK runner.run returns an iterator of events
-        events = self.runner.run(user_id, session_id, content)
+        # Run Synchronously
+        events = self.runner.run(
+            user_id=user_id, 
+            session_id=session_id, 
+            new_message=content
+        )
         
         final_response = ""
         for event in events:
@@ -109,8 +126,14 @@ class ComplianceService:
         user_id = "user_default"
         session_id = f"session_row_{row_index}"
         
+        self._get_or_create_session(user_id, session_id)
+        
         content = types.Content(role='user', parts=[types.Part(text=message)])
-        events = self.runner.run(user_id, session_id, content)
+        events = self.runner.run(
+            user_id=user_id, 
+            session_id=session_id, 
+            new_message=content
+        )
         
         final_response = ""
         for event in events:

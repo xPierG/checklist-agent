@@ -1,6 +1,6 @@
 # ADK Compliance Agent
 
-A multi-agent compliance platform built with Google's Agent Development Kit (ADK), Gemini 2.5, and Streamlit. This tool assists auditors by analyzing documents against a checklist using a "Collaborative Intelligence" approach.
+A multi-agent compliance platform built with Google's Agent Development Kit (ADK), Gemini 2.5/3.0, and Streamlit. This tool assists auditors by analyzing documents against a checklist using a "Collaborative Intelligence" approach.
 
 ## Features
 *   **Multi-Agent Architecture**: Uses an Orchestrator, Librarian, and Auditor agent team.
