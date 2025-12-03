@@ -1,6 +1,6 @@
 from google.adk.agents import LlmAgent
 
-def create_auditor_agent(model_name: str = "gemini-3-pro-preview") -> LlmAgent:
+def create_auditor_agent(model_name: str = "gemini-2.5-pro") -> LlmAgent:
     """
     Creates the Auditor agent.
     
