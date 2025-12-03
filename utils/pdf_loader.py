@@ -34,7 +34,7 @@ class PDFLoader:
         print(f"Uploading {display_name}...")
         
         # Upload the file
-        file_ref = self.client.files.upload(path=file_path)
+        file_ref = self.client.files.upload(file=file_path)
         
         print(f"Uploaded {display_name} as {file_ref.name}")
         return file_ref.name

@@ -53,7 +53,7 @@ if "checklist_df" in st.session_state:
         
         # Display Data Grid
         # We use a simple dataframe display. For interactivity, we might need st.data_editor in future
-        st.dataframe(df, use_container_width=True)
+        st.dataframe(df, width='stretch')
         
         # Row Selection
         row_indices = df.index.tolist()

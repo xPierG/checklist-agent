@@ -28,8 +28,8 @@ class ComplianceService:
         
         # ADK Setup
         self.agent = create_orchestrator_agent()
-        self.session_service = InMemorySessionService()
-        self.runner = InMemoryRunner(self.agent, app_name="compliance_app", session_service=self.session_service)
+        self.runner = InMemoryRunner(self.agent, app_name="agents")
+        self.session_service = self.runner.session_service
         
         # State
         self.checklist_df = None
@@ -63,10 +63,10 @@ class ComplianceService:
         
         # Ensure session exists
         try:
-            self.session_service.get_session("compliance_app", user_id, session_id).blocking_get()
+            self.session_service.get_session("agents", user_id, session_id).blocking_get()
         except:
              self.session_service.create_session(
-                "compliance_app", 
+                "agents", 
                 user_id, 
                 session_id,
                 state={"pdf_uri": self.pdf_uri} # Pass PDF context to agents via state if needed
