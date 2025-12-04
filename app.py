@@ -193,6 +193,8 @@ if "checklist_df" in st.session_state:
         
         # Action buttons above checklist
         st.markdown("### 🎯 Actions")
+        
+        # Row 1: Batch actions
         col_btn1, col_btn2, col_btn3, col_btn4 = st.columns(4)
         
         with col_btn1:
@@ -227,6 +229,28 @@ if "checklist_df" in st.session_state:
         with col_btn4:
             if st.button("🔄 Refresh", width="stretch"):
                 st.rerun()
+        
+        # Row 2: Individual row analysis
+        st.markdown("**🔍 Analyze Individual Row**")
+        col_row1, col_row2 = st.columns([3, 1])
+        
+        with col_row1:
+            row_to_analyze = st.selectbox(
+                "Select row:",
+                df.index.tolist(),
+                format_func=lambda x: f"Row {x}: {service.get_question_from_row(x)[:50]}...",
+                key="individual_row_selector"
+            )
+        
+        with col_row2:
+            st.markdown("<br>", unsafe_allow_html=True)  # Spacing
+            if st.button("🔍 Analyze", width="stretch", type="primary", key="analyze_individual"):
+                logger.info(f"User requested analysis for row {row_to_analyze}")
+                question = service.get_question_from_row(row_to_analyze)
+                with st.spinner("Analyzing..."):
+                    service.analyze_row(row_to_analyze, question)
+                    st.session_state.checklist_df = service.get_dataframe()
+                    st.rerun()
         
         st.markdown("---")
         
@@ -303,28 +327,6 @@ if "checklist_df" in st.session_state:
             if not edited_df.equals(df_display):
                 service.checklist_df = edited_df
                 st.session_state.checklist_df = edited_df
-            
-            # Per-row analyze section
-            st.markdown("---")
-            st.markdown("**🔍 Analyze Individual Row**")
-            
-            row_col1, row_col2 = st.columns([3, 1])
-            with row_col1:
-                row_to_analyze = st.selectbox(
-                    "Select row to analyze:",
-                    df.index.tolist(),
-                    format_func=lambda x: f"Row {x}: {service.get_question_from_row(x)[:50]}..."
-                )
-            
-            with row_col2:
-                st.markdown("<br>", unsafe_allow_html=True)  # Spacing
-                if st.button("🔍 Analyze This Row", width="stretch", type="primary"):
-                    logger.info(f"User requested analysis for row {row_to_analyze}")
-                    question = service.get_question_from_row(row_to_analyze)
-                    with st.spinner("Analyzing..."):
-                        service.analyze_row(row_to_analyze, question)
-                        st.session_state.checklist_df = service.get_dataframe()
-                        st.rerun()
         
         with col_chat:
             st.subheader("💬 Chat")
