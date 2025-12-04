@@ -1,35 +1,82 @@
 # Checklist Excel Format Specification
+# Checklist Format Guide
 
-## Required Columns
+## Document Types
 
-Your Excel checklist must contain the following columns (case-insensitive):
+The Checklist Agent works with **three types of documents**:
 
-### Mandatory Columns
-1. **ID** or **Item_ID** - Unique identifier for each checklist item (e.g., "1", "2", "3" or "REQ-001")
-2. **Question** or **Requirement** - The compliance question or requirement to evaluate
-3. **Category** (optional) - Grouping category (e.g., "Data Protection", "Security", "Governance")
+### 1. 📚 Context Documents (Regulations/Policies)
+**Purpose**: Define the rules and compliance requirements
 
-### Auto-Generated Columns
-These columns will be automatically added if missing:
-- **AI_Proposal** - The agent's initial assessment
-- **Status** - Current status (PENDING, DRAFT, APPROVED, REJECTED)
-- **Discussion_Log** - Chat history for this item
-- **Final_Answer** - The approved final answer
+**Examples**:
+- GDPR regulation
+- ISO 27001 standard
+- Company security policy
+- Industry best practices
 
-## Example Structure
+**Upload**: In sidebar under "Context Documents"
+**Optional**: Yes, but recommended for accurate compliance verification
+
+### 2. 📋 Checklist (Excel/CSV)
+**Purpose**: Contains the questions to verify
+
+**Required Columns**:
+- **ID Column**: `ID`, `Item_ID`, `Number`, `No`, or `#`
+- **Question Column**: `Question`, `Requirement`, `Item`, `Description`, `Check`, or `Domanda`
+- **Category** (optional): For grouping questions
+
+**Auto-Generated Columns** (added by AI):
+- `🤖 Risposta`: Direct answer to the question
+- `🤖 Confidenza`: Confidence score (0-100%)
+- `🤖 Giustificazione`: Detailed justification with text snippets
+- `📊 Status`: PENDING → DRAFT → APPROVED/REJECTED
+- `Discussion_Log`: Chat history for each item
+
+### 3. 📄 Target Documents (To Analyze)
+**Purpose**: The actual content being verified for compliance
+
+**Examples**:
+- Company privacy manual
+- Security procedures document
+- Data processing records
+- Internal policies
+
+**Upload**: In sidebar under "Target Documents"
+**Required**: Yes, these are the documents being verified
+
+## How It Works
 
 ```
-| ID | Category          | Question                                           | AI_Proposal | Status  | Discussion_Log | Final_Answer |
-|----|-------------------|----------------------------------------------------|-------------|---------|----------------|--------------|
-| 1  | Data Protection   | Is there a DPO appointed?                         |             | PENDING |                |              |
-| 2  | Security          | Are access controls documented?                    |             | PENDING |                |              |
-| 3  | Governance        | Is there a data retention policy?                  |             | PENDING |                |              |
+1. Upload Context Documents (optional)
+   ↓
+2. Upload Target Documents (required)
+   ↓
+3. Upload Checklist (required)
+   ↓
+4. AI analyzes Target against Context rules
+   ↓
+5. Answers checklist questions with evidence
 ```
 
-## Supported Formats
-- `.xlsx` (Excel 2007+)
-- `.xls` (Excel 97-2003)
-- `.csv` (Comma-separated values)
+## Checklist Format Details
+
+### Supported File Types
+- Excel: `.xlsx`, `.xls`
+- CSV: `.csv`
+
+### Example Structure
+
+| ID | Question | Category |
+|----|----------|----------|
+| 1  | Is there a DPO appointed? | Privacy |
+| 2  | Are access controls documented? | Security |
+| 3  | Is data retention policy defined? | Privacy |
+
+### After AI Analysis
+
+| ID | Question | 🤖 Risposta | 🤖 Confidenza | 🤖 Giustificazione | 📊 Status |
+|----|----------|-------------|---------------|-------------------|-----------|
+| 1  | Is there a DPO appointed? | Yes, John Doe | 95% | Context Rule: "GDPR Art. 37..."<br>Target Evidence: "Section 3.2 states..." | DRAFT |
 
 ## Best Practices
 1. Keep questions clear and specific

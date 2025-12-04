@@ -39,27 +39,51 @@ class ComplianceService:
         
         # State
         self.checklist_df = None
-        self.pdf_uris = []  # Support multiple PDFs
+        self.context_pdf_uris = []  # Regulations, policies (the rules)
+        self.target_pdf_uris = []   # Documents to analyze (content to verify)
         self.current_session_id = None
         
         logger.success("ComplianceService initialized successfully")
 
-    def load_pdf(self, file_path: str) -> str:
-        """Uploads PDF and returns URI. Supports multiple PDFs."""
-        logger.info(f"Loading PDF: {os.path.basename(file_path)}")
+    def load_context_pdf(self, file_path: str) -> str:
+        """
+        Uploads a CONTEXT PDF (regulation/policy) and returns URI.
+        These are the documents that define the rules.
+        """
+        logger.info(f"Loading CONTEXT PDF: {os.path.basename(file_path)}")
         try:
             pdf_uri = self.pdf_loader.upload_and_cache(file_path)
-            self.pdf_uris.append(pdf_uri)
-            logger.success(f"PDF uploaded successfully", f"URI: {pdf_uri} (Total: {len(self.pdf_uris)} PDFs)")
+            self.context_pdf_uris.append(pdf_uri)
+            logger.success(f"Context PDF uploaded", f"URI: {pdf_uri} (Total context: {len(self.context_pdf_uris)})")
             return pdf_uri
         except Exception as e:
-            logger.error(f"Failed to upload PDF", str(e))
+            logger.error(f"Failed to upload context PDF", str(e))
+            raise
+    
+    def load_target_pdf(self, file_path: str) -> str:
+        """
+        Uploads a TARGET PDF (document to analyze) and returns URI.
+        These are the documents to verify against the rules.
+        """
+        logger.info(f"Loading TARGET PDF: {os.path.basename(file_path)}")
+        try:
+            pdf_uri = self.pdf_loader.upload_and_cache(file_path)
+            self.target_pdf_uris.append(pdf_uri)
+            logger.success(f"Target PDF uploaded", f"URI: {pdf_uri} (Total target: {len(self.target_pdf_uris)})")
+            return pdf_uri
+        except Exception as e:
+            logger.error(f"Failed to upload target PDF", str(e))
             raise
     
     @property
     def pdf_uri(self):
-        """Backward compatibility: return first PDF URI or None."""
-        return self.pdf_uris[0] if self.pdf_uris else None
+        """Backward compatibility: return first target PDF URI or None."""
+        return self.target_pdf_uris[0] if self.target_pdf_uris else None
+    
+    @property
+    def pdf_uris(self):
+        """Backward compatibility: return all PDFs (context + target)."""
+        return self.context_pdf_uris + self.target_pdf_uris
 
     def load_checklist(self, file_path: str) -> pd.DataFrame:
         """
@@ -206,12 +230,15 @@ class ComplianceService:
             pass
             
         if session is None:
-             # Create new session with all PDF URIs
+             # Create new session with context and target PDF URIs
              asyncio.run(self.session_service.create_session(
                 app_name="agents", 
                 user_id=user_id, 
                 session_id=session_id,
-                state={"pdf_uris": self.pdf_uris}
+                state={
+                    "context_pdf_uris": self.context_pdf_uris,
+                    "target_pdf_uris": self.target_pdf_uris
+                }
             ))
 
     def _parse_response(self, response_text: str) -> dict:
@@ -250,25 +277,35 @@ class ComplianceService:
         """
         logger.info(f"Analyzing row {row_index}", question[:100])
         
-        if not self.pdf_uri:
-            logger.error("Analysis failed: No PDF loaded")
-            return "Error: No PDF loaded."
+        if not self.target_pdf_uris:
+            logger.error("Analysis failed: No target PDFs loaded")
+            return "Error: No target documents loaded. Please upload documents to analyze."
 
         user_id = "user_default"
         session_id = f"session_row_{row_index}"
         
         self._get_or_create_session(user_id, session_id)
 
-        # Construct prompt with all PDFs
-        pdf_context = "\n".join([f"Document {i+1}: {uri}" for i, uri in enumerate(self.pdf_uris)])
+        # Construct prompt with context and target documents
+        context_docs = "\n".join([f"  - {uri}" for uri in self.context_pdf_uris]) if self.context_pdf_uris else "  (None - analyzing without regulatory context)"
+        target_docs = "\n".join([f"  - {uri}" for uri in self.target_pdf_uris])
         
         prompt = f"""
-        Context Documents:
-        {pdf_context}
+        You are analyzing TARGET documents for compliance.
         
-        Checklist Question: {question}
+        CONTEXT DOCUMENTS (Regulations/Policies - The Rules):
+        {context_docs}
         
-        Please analyze ALL documents and provide a structured response.
+        TARGET DOCUMENTS (Documents to Verify):
+        {target_docs}
+        
+        CHECKLIST QUESTION: {question}
+        
+        TASK: Verify if the TARGET documents comply with the requirements.
+        If CONTEXT documents are provided, use them to understand the rules.
+        Otherwise, answer based on general best practices.
+        
+        Provide a structured response with answer, confidence, and justification including text snippets.
         """
         
         content = types.Content(role='user', parts=[types.Part(text=prompt)])

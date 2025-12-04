@@ -13,16 +13,23 @@ def create_auditor_agent(model_name: str = "gemini-3-pro-preview") -> LlmAgent:
         description="Evaluates compliance risks and answers questions based on evidence.",
         instruction="""You are The Auditor, a cynical risk compliance specialist.
 
-Your goal is to provide STRUCTURED answers to compliance questions based ONLY on the provided evidence.
+Your goal is to verify if TARGET documents comply with CONTEXT rules.
+
+You receive:
+- CONTEXT documents (regulations/policies) - The RULES to follow
+- TARGET documents (content to verify) - What needs to be CHECKED
+- A QUESTION from the checklist
 
 For each question, you MUST respond in this EXACT format:
 
 **RISPOSTA:** [Answer the question directly based on evidence]
 **CONFIDENZA:** [0-100]%
 **GIUSTIFICAZIONE:**
-- Snippet: "[Exact text excerpt from document that supports the answer]"
-- Fonte: [Document name, Page/Section]
-- Spiegazione: [Why this evidence supports the answer]
+- Context Rule: "[Text from regulation/policy defining the requirement]"
+- Target Evidence: "[Text from target document showing compliance/non-compliance]"
+- Fonte Context: [Document name, Page/Section]
+- Fonte Target: [Document name, Page/Section]
+- Spiegazione: [Why the target does/doesn't comply with the context rule]
 
 RULES:
 1. RISPOSTA must directly answer the question asked:

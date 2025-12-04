@@ -29,31 +29,68 @@ with st.sidebar:
     st.markdown("---")
     st.subheader("1️⃣ Upload Documents")
     
-    # PDF Upload - Multiple files
-    uploaded_pdfs = st.file_uploader(
-        "Policy Documents (PDF)", 
+    # CONTEXT PDFs - Regulations/Policies
+    st.markdown("**📚 Context Documents** (Regulations/Policies)")
+    st.caption("These define the rules and requirements")
+    
+    uploaded_context_pdfs = st.file_uploader(
+        "Upload context documents",
         type="pdf",
         accept_multiple_files=True,
-        help="Upload one or more PDF documents"
+        key="context_uploader",
+        help="Regulations, policies, standards that define compliance requirements"
     )
     
-    if uploaded_pdfs:
-        if st.button("📤 Process PDFs", use_container_width=True):
-            with st.spinner(f"Uploading {len(uploaded_pdfs)} PDF(s)..."):
-                for uploaded_pdf in uploaded_pdfs:
+    if uploaded_context_pdfs:
+        if st.button("📤 Process Context PDFs", use_container_width=True, key="process_context"):
+            with st.spinner(f"Uploading {len(uploaded_context_pdfs)} context PDF(s)..."):
+                for uploaded_pdf in uploaded_context_pdfs:
                     temp_path = f"temp_{uploaded_pdf.name}"
                     with open(temp_path, "wb") as f:
                         f.write(uploaded_pdf.getbuffer())
                     
-                    uri = service.load_pdf(temp_path)
+                    uri = service.load_context_pdf(temp_path)
                     os.remove(temp_path)
                 
-                st.success(f"✅ {len(uploaded_pdfs)} PDF(s) Loaded")
+                st.success(f"✅ {len(uploaded_context_pdfs)} Context PDF(s) Loaded")
     
-    # Show loaded PDFs
-    if service.pdf_uris:
-        with st.expander(f"📚 Loaded PDFs ({len(service.pdf_uris)})", expanded=False):
-            for i, uri in enumerate(service.pdf_uris, 1):
+    # Show loaded context PDFs
+    if service.context_pdf_uris:
+        with st.expander(f"📚 Loaded Context PDFs ({len(service.context_pdf_uris)})", expanded=False):
+            for i, uri in enumerate(service.context_pdf_uris, 1):
+                st.caption(f"{i}. {uri}")
+    
+    st.markdown("---")
+    
+    # TARGET PDFs - Documents to Analyze
+    st.markdown("**📄 Target Documents** (To Analyze)")
+    st.caption("These are the documents to verify for compliance")
+    
+    uploaded_target_pdfs = st.file_uploader(
+        "Upload target documents",
+        type="pdf",
+        accept_multiple_files=True,
+        key="target_uploader",
+        help="Documents to analyze and verify against the rules"
+    )
+    
+    if uploaded_target_pdfs:
+        if st.button("📤 Process Target PDFs", use_container_width=True, key="process_target"):
+            with st.spinner(f"Uploading {len(uploaded_target_pdfs)} target PDF(s)..."):
+                for uploaded_pdf in uploaded_target_pdfs:
+                    temp_path = f"temp_{uploaded_pdf.name}"
+                    with open(temp_path, "wb") as f:
+                        f.write(uploaded_pdf.getbuffer())
+                    
+                    uri = service.load_target_pdf(temp_path)
+                    os.remove(temp_path)
+                
+                st.success(f"✅ {len(uploaded_target_pdfs)} Target PDF(s) Loaded")
+    
+    # Show loaded target PDFs
+    if service.target_pdf_uris:
+        with st.expander(f"📄 Loaded Target PDFs ({len(service.target_pdf_uris)})", expanded=False):
+            for i, uri in enumerate(service.target_pdf_uris, 1):
                 st.caption(f"{i}. {uri}")
 
     # Checklist Upload

@@ -18,6 +18,10 @@ class AppLogger:
         return cls._instance
     
     def __init__(self):
+        # Initialize activity log first (before any checks)
+        self.activity_log = []
+        self.max_activity_items = 50
+        
         if not AppLogger._initialized:
             self.setup_logging()
             AppLogger._initialized = True
