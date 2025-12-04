@@ -29,19 +29,32 @@ with st.sidebar:
     st.markdown("---")
     st.subheader("1️⃣ Upload Documents")
     
-    # PDF Upload
-    uploaded_pdf = st.file_uploader("Policy Document (PDF)", type="pdf")
-    if uploaded_pdf:
-        # Save to temp file
-        temp_path = f"temp_{uploaded_pdf.name}"
-        with open(temp_path, "wb") as f:
-            f.write(uploaded_pdf.getbuffer())
-        
-        if st.button("📤 Process PDF", use_container_width=True):
-            with st.spinner("Uploading to Gemini..."):
-                uri = service.load_pdf(temp_path)
-                st.success(f"✅ PDF Loaded")
-                os.remove(temp_path)
+    # PDF Upload - Multiple files
+    uploaded_pdfs = st.file_uploader(
+        "Policy Documents (PDF)", 
+        type="pdf",
+        accept_multiple_files=True,
+        help="Upload one or more PDF documents"
+    )
+    
+    if uploaded_pdfs:
+        if st.button("📤 Process PDFs", use_container_width=True):
+            with st.spinner(f"Uploading {len(uploaded_pdfs)} PDF(s)..."):
+                for uploaded_pdf in uploaded_pdfs:
+                    temp_path = f"temp_{uploaded_pdf.name}"
+                    with open(temp_path, "wb") as f:
+                        f.write(uploaded_pdf.getbuffer())
+                    
+                    uri = service.load_pdf(temp_path)
+                    os.remove(temp_path)
+                
+                st.success(f"✅ {len(uploaded_pdfs)} PDF(s) Loaded")
+    
+    # Show loaded PDFs
+    if service.pdf_uris:
+        with st.expander(f"📚 Loaded PDFs ({len(service.pdf_uris)})", expanded=False):
+            for i, uri in enumerate(service.pdf_uris, 1):
+                st.caption(f"{i}. {uri}")
 
     # Checklist Upload
     uploaded_excel = st.file_uploader("Checklist (Excel)", type=["xlsx", "xls", "csv"])

@@ -39,28 +39,39 @@ class ComplianceService:
         
         # State
         self.checklist_df = None
-        self.pdf_uri = None
+        self.pdf_uris = []  # Support multiple PDFs
         self.current_session_id = None
         
         logger.success("ComplianceService initialized successfully")
 
     def load_pdf(self, file_path: str) -> str:
-        """Uploads PDF and returns URI."""
+        """Uploads PDF and returns URI. Supports multiple PDFs."""
         logger.info(f"Loading PDF: {os.path.basename(file_path)}")
         try:
-            self.pdf_uri = self.pdf_loader.upload_and_cache(file_path)
-            logger.success(f"PDF uploaded successfully", f"URI: {self.pdf_uri}")
-            return self.pdf_uri
+            pdf_uri = self.pdf_loader.upload_and_cache(file_path)
+            self.pdf_uris.append(pdf_uri)
+            logger.success(f"PDF uploaded successfully", f"URI: {pdf_uri} (Total: {len(self.pdf_uris)} PDFs)")
+            return pdf_uri
         except Exception as e:
             logger.error(f"Failed to upload PDF", str(e))
             raise
+    
+    @property
+    def pdf_uri(self):
+        """Backward compatibility: return first PDF URI or None."""
+        return self.pdf_uris[0] if self.pdf_uris else None
 
     def load_checklist(self, file_path: str) -> pd.DataFrame:
         """
         Loads Excel checklist with flexible column detection.
         Looks for ID and Question columns using common naming patterns.
         """
-        logger.info(f"Loading checklist: {os.path.basename(file_path)}")
+        # Handle both file paths and UploadedFile objects
+        filename = getattr(file_path, 'name', str(file_path))
+        if hasattr(filename, 'split'):
+            filename = filename.split('/')[-1]  # Get basename
+        
+        logger.info(f"Loading checklist: {filename}")
         
         # Force all columns to be strings to avoid PyArrow inference issues
         self.checklist_df = pd.read_excel(file_path, dtype=str)
@@ -195,12 +206,12 @@ class ComplianceService:
             pass
             
         if session is None:
-             # Create new session
+             # Create new session with all PDF URIs
              asyncio.run(self.session_service.create_session(
                 app_name="agents", 
                 user_id=user_id, 
                 session_id=session_id,
-                state={"pdf_uri": self.pdf_uri}
+                state={"pdf_uris": self.pdf_uris}
             ))
 
     def _parse_response(self, response_text: str) -> dict:
@@ -248,13 +259,16 @@ class ComplianceService:
         
         self._get_or_create_session(user_id, session_id)
 
-        # Construct prompt
+        # Construct prompt with all PDFs
+        pdf_context = "\n".join([f"Document {i+1}: {uri}" for i, uri in enumerate(self.pdf_uris)])
+        
         prompt = f"""
-        Context Document URI: {self.pdf_uri}
+        Context Documents:
+        {pdf_context}
         
         Checklist Question: {question}
         
-        Please analyze the document and provide a structured response.
+        Please analyze ALL documents and provide a structured response.
         """
         
         content = types.Content(role='user', parts=[types.Part(text=prompt)])
