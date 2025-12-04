@@ -210,7 +210,8 @@ class ComplianceService:
                     "status": "error"
                 })
         
-        logger.success(f"Batch analysis complete", f"Processed {len(results)}        
+        processed_count = len(results)
+        logger.success(f"Batch analysis complete", f"Processed {processed_count} items")
         return {
             "total_processed": processed_count,
             "results": results
