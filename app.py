@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
+import time
 from services.compliance_service import ComplianceService
 from utils.logger import logger
 
@@ -110,13 +111,9 @@ with st.sidebar:
                 st.warning("⚠️ Could not auto-detect question column. See CHECKLIST_FORMAT.md")
     
     st.markdown("---")
-    st.subheader("2️⃣ Processing Mode")
+    st.subheader("2️⃣ Processing")
     
-    mode = st.radio(
-        "Choose mode:",
-        ["Single Item", "Batch (First 3)"],
-        help="Single: Analyze one item at a time. Batch: Process first 3 pending items."
-    )
+    st.caption("💡 Tip: Click on Status cells to change DRAFT → APPROVED/REJECTED")
     
     # Activity Monitor
     st.markdown("---")
@@ -144,231 +141,236 @@ with st.sidebar:
         logger.clear_activities()
         st.rerun()
 
-# Main Area - 3 Column Layout
+# Main Area
 if "checklist_df" in st.session_state:
     df = st.session_state.checklist_df
     
-    if mode == "Batch (First 3)":
-        # Batch Mode (full width)
-        st.header("📦 Batch Processing Mode")
-        
-        st.info("This will analyze the first 3 PENDING items in your checklist. Processing includes 2-second delays between items to respect API rate limits (~6 seconds total).")
-        
-        # Show preview
-        pending_df = df[df['Status'] == 'PENDING'].head(3)
-        if len(pending_df) > 0:
-            st.subheader("Items to Process")
-            st.dataframe(pending_df, width='stretch')
-            
-            if st.button("🚀 Start Batch Analysis", type="primary"):
-                with st.spinner("Processing batch..."):
-                    results = service.batch_analyze(max_items=3)
-                    
-                    if "error" in results:
-                        st.error(f"Error: {results['error']}")
-                    else:
-                        st.success(f"✅ Processed {results['total_processed']} items")
-                        
-                        # Show results
-                        for result in results['results']:
-                            with st.expander(f"Item {result['id']}: {result['question'][:50]}..."):
-                                if result['status'] == 'success':
-                                    st.markdown("**Response:**")
-                                    st.write(result['response'])
-                                else:
-                                    st.error(f"Error: {result.get('error', 'Unknown error')}")
-                        
-                        # Refresh dataframe
-                        st.session_state.checklist_df = service.get_dataframe()
-                        st.rerun()
-        else:
-            st.info("No pending items to process.")
-        
-        # Show full checklist
-        st.subheader("Full Checklist")
-        st.dataframe(df, width='stretch')
+    # Action buttons above checklist
+    st.markdown("### 🎯 Actions")
     
-    else:
-        # Single Item Mode - 2 Column Layout (70% Checklist, 30% Chat)
-        
-        # Action buttons above checklist
-        st.markdown("### 🎯 Actions")
-        
-        # Row 1: Batch actions
-        col_btn1, col_btn2, col_btn3, col_btn4 = st.columns(4)
-        
-        with col_btn1:
-            if st.button("🔍 Analyze All Pending", width="stretch"):
-                pending_count = len(df[df['Status'] == 'PENDING'])
-                if pending_count > 0:
-                    with st.spinner(f"Analyzing {pending_count} pending items..."):
-                        for idx in df[df['Status'] == 'PENDING'].index:
+    # Row 1: Main actions
+    col_btn1, col_btn2, col_btn3 = st.columns(3)
+    
+    with col_btn1:
+        # Batch Analysis with dialog
+        if st.button("📦 Batch Analysis", width="stretch", type="primary"):
+            st.session_state.show_batch_dialog = True
+    
+    with col_btn2:
+        if st.button("💾 Export Results", width="stretch"):
+            # Export to Excel
+            output_file = "checklist_results.xlsx"
+            df.to_excel(output_file, index=False)
+            st.success(f"Exported to {output_file}")
+    
+    with col_btn3:
+        if st.button("🔄 Refresh", width="stretch"):
+            st.rerun()
+    
+    # Batch Analysis Dialog
+    if st.session_state.get('show_batch_dialog', False):
+        with st.expander("📦 Batch Analysis Options", expanded=True):
+            st.markdown("**Select rows to analyze:**")
+            
+            batch_mode = st.radio(
+                "Mode:",
+                ["All Pending", "Range", "Specific Rows"],
+                horizontal=True
+            )
+            
+            rows_to_process = []
+            
+            if batch_mode == "All Pending":
+                pending_rows = df[df['Status'] == 'PENDING'].index.tolist()
+                st.info(f"Will analyze {len(pending_rows)} pending rows")
+                rows_to_process = pending_rows
+            
+            elif batch_mode == "Range":
+                col_r1, col_r2 = st.columns(2)
+                with col_r1:
+                    start_row = st.number_input("From row:", min_value=0, max_value=len(df)-1, value=0)
+                with col_r2:
+                    end_row = st.number_input("To row:", min_value=0, max_value=len(df)-1, value=min(2, len(df)-1))
+                
+                if start_row <= end_row:
+                    rows_to_process = list(range(start_row, end_row + 1))
+                    st.info(f"Will analyze rows {start_row} to {end_row} ({len(rows_to_process)} rows)")
+                else:
+                    st.error("Start row must be <= End row")
+            
+            else:  # Specific Rows
+                row_input = st.text_input(
+                    "Enter row numbers (comma-separated):",
+                    placeholder="e.g., 0,2,5,7"
+                )
+                if row_input:
+                    try:
+                        rows_to_process = [int(r.strip()) for r in row_input.split(',')]
+                        # Validate
+                        rows_to_process = [r for r in rows_to_process if 0 <= r < len(df)]
+                        st.info(f"Will analyze {len(rows_to_process)} rows: {rows_to_process}")
+                    except:
+                        st.error("Invalid format. Use comma-separated numbers.")
+            
+            col_b1, col_b2 = st.columns(2)
+            with col_b1:
+                if st.button("▶️ Start Batch", width="stretch", disabled=len(rows_to_process)==0):
+                    with st.spinner(f"Analyzing {len(rows_to_process)} rows..."):
+                        for idx in rows_to_process:
                             question = service.get_question_from_row(idx)
                             service.analyze_row(idx, question)
+                            # Add delay to avoid rate limiting
+                            if idx != rows_to_process[-1]:
+                                time.sleep(2)
                         st.session_state.checklist_df = service.get_dataframe()
+                        st.session_state.show_batch_dialog = False
+                        st.success(f"✅ Analyzed {len(rows_to_process)} rows")
                         st.rerun()
-                else:
-                    st.info("No pending items")
-        
-        with col_btn2:
-            selected_indices = st.session_state.get('selected_rows', [])
-            if st.button("🔍 Analyze Selected", width="stretch", disabled=len(selected_indices)==0):
-                for idx in selected_indices:
-                    question = service.get_question_from_row(idx)
-                    service.analyze_row(idx, question)
+            
+            with col_b2:
+                if st.button("❌ Cancel", width="stretch"):
+                    st.session_state.show_batch_dialog = False
+                    st.rerun()
+    
+    # Row 2: Individual row analysis
+    st.markdown("**🔍 Analyze Individual Row**")
+    col_row1, col_row2 = st.columns([3, 1])
+    
+    with col_row1:
+        row_to_analyze = st.selectbox(
+            "Select row:",
+            df.index.tolist(),
+            format_func=lambda x: f"Row {x}: {service.get_question_from_row(x)[:50]}...",
+            key="individual_row_selector"
+        )
+    
+    with col_row2:
+        st.markdown("<br>", unsafe_allow_html=True)  # Spacing
+        if st.button("🔍 Analyze", width="stretch", type="secondary", key="analyze_individual"):
+            logger.info(f"User requested analysis for row {row_to_analyze}")
+            question = service.get_question_from_row(row_to_analyze)
+            with st.spinner("Analyzing..."):
+                service.analyze_row(row_to_analyze, question)
                 st.session_state.checklist_df = service.get_dataframe()
                 st.rerun()
+    
+    st.markdown("---")
+    
+    # Main 2-column layout
+    col_checklist, col_chat = st.columns([7, 3])
+    
+    with col_checklist:
+        st.subheader("📋 Checklist")
         
-        with col_btn3:
-            if st.button("💾 Export Results", width="stretch"):
-                # Export to Excel
-                output_file = "checklist_results.xlsx"
-                df.to_excel(output_file, index=False)
-                st.success(f"Exported to {output_file}")
+        # Reorder columns: Original first, then AI columns
+        all_cols = df.columns.tolist()
+        ai_columns = ['Risposta', 'Confidenza', 'Giustificazione', 'Status', 'Discussion_Log']
         
-        with col_btn4:
-            if st.button("🔄 Refresh", width="stretch"):
-                st.rerun()
+        # Get original columns (not AI-generated)
+        original_cols = [col for col in all_cols if col not in ai_columns]
         
-        # Row 2: Individual row analysis
-        st.markdown("**🔍 Analyze Individual Row**")
-        col_row1, col_row2 = st.columns([3, 1])
+        # Reorder: original columns, then AI columns
+        ordered_cols = original_cols + [col for col in ai_columns if col in all_cols]
+        df_display = df[ordered_cols]
         
-        with col_row1:
-            row_to_analyze = st.selectbox(
-                "Select row:",
-                df.index.tolist(),
-                format_func=lambda x: f"Row {x}: {service.get_question_from_row(x)[:50]}...",
-                key="individual_row_selector"
+        # Column configuration with styling
+        column_config = {}
+        
+        # Original columns - no special config (will appear normal)
+        for col in original_cols:
+            if col == service.question_column:
+                column_config[col] = st.column_config.TextColumn(
+                    col,
+                    width="large",
+                    help="Domanda della checklist"
+                )
+        
+        # AI columns with emoji and styling
+        if 'Risposta' in all_cols:
+            column_config['Risposta'] = st.column_config.TextColumn(
+                "🤖 Risposta",
+                help="Risposta generata dall'AI",
+                width="medium"
             )
         
-        with col_row2:
-            st.markdown("<br>", unsafe_allow_html=True)  # Spacing
-            if st.button("🔍 Analyze", width="stretch", type="primary", key="analyze_individual"):
-                logger.info(f"User requested analysis for row {row_to_analyze}")
-                question = service.get_question_from_row(row_to_analyze)
-                with st.spinner("Analyzing..."):
-                    service.analyze_row(row_to_analyze, question)
-                    st.session_state.checklist_df = service.get_dataframe()
-                    st.rerun()
-        
-        st.markdown("---")
-        
-        # Main 2-column layout
-        col_checklist, col_chat = st.columns([7, 3])
-        
-        with col_checklist:
-            st.subheader("📋 Checklist")
-            
-            # Reorder columns: Original first, then AI columns
-            all_cols = df.columns.tolist()
-            ai_columns = ['Risposta', 'Confidenza', 'Giustificazione', 'Status', 'Discussion_Log']
-            
-            # Get original columns (not AI-generated)
-            original_cols = [col for col in all_cols if col not in ai_columns]
-            
-            # Reorder: original columns, then AI columns
-            ordered_cols = original_cols + [col for col in ai_columns if col in all_cols]
-            df_display = df[ordered_cols]
-            
-            # Column configuration with styling
-            column_config = {}
-            
-            # Original columns - no special config (will appear normal)
-            for col in original_cols:
-                if col == service.question_column:
-                    column_config[col] = st.column_config.TextColumn(
-                        col,
-                        width="large",
-                        help="Domanda della checklist"
-                    )
-            
-            # AI columns with emoji and styling
-            if 'Risposta' in all_cols:
-                column_config['Risposta'] = st.column_config.TextColumn(
-                    "🤖 Risposta",
-                    help="Risposta generata dall'AI",
-                    width="medium"
-                )
-            
-            if 'Confidenza' in all_cols:
-                column_config['Confidenza'] = st.column_config.TextColumn(
-                    "🤖 Confidenza",
-                    help="Livello di confidenza (0-100%)",
-                    width="small"
-                )
-            
-            if 'Giustificazione' in all_cols:
-                column_config['Giustificazione'] = st.column_config.TextColumn(
-                    "🤖 Giustificazione",
-                    help="Snippet di testo e spiegazione",
-                    width="large"
-                )
-            
-            if 'Status' in all_cols:
-                column_config['Status'] = st.column_config.SelectboxColumn(
-                    "📊 Status",
-                    help="Stato dell'analisi",
-                    width="small",
-                    options=['PENDING', 'DRAFT', 'APPROVED', 'REJECTED']
-                )
-            
-            # Display editable dataframe
-            edited_df = st.data_editor(
-                df_display,
-                column_config=column_config,
-                hide_index=False,
-                width="stretch",
-                height=500,
-                key="checklist_editor"
+        if 'Confidenza' in all_cols:
+            column_config['Confidenza'] = st.column_config.TextColumn(
+                "🤖 Confidenza",
+                help="Livello di confidenza (0-100%)",
+                width="small"
             )
-            
-            # Update service dataframe if edited
-            if not edited_df.equals(df_display):
-                service.checklist_df = edited_df
-                st.session_state.checklist_df = edited_df
         
-        with col_chat:
-            st.subheader("💬 Chat")
-            
-            # Row selector for chat
-            chat_row = st.selectbox(
-                "Discuss row:",
-                df.index.tolist(),
-                format_func=lambda x: f"Row {x}",
-                key="chat_row_selector"
+        if 'Giustificazione' in all_cols:
+            column_config['Giustificazione'] = st.column_config.TextColumn(
+                "🤖 Giustificazione",
+                help="Snippet di testo e spiegazione",
+                width="large"
             )
+        
+        if 'Status' in all_cols:
+            column_config['Status'] = st.column_config.SelectboxColumn(
+                "📊 Status",
+                help="Stato dell'analisi - Click to change",
+                width="small",
+                options=['PENDING', 'DRAFT', 'APPROVED', 'REJECTED']
+            )
+        
+        # Display editable dataframe
+        edited_df = st.data_editor(
+            df_display,
+            column_config=column_config,
+            hide_index=False,
+            width="stretch",
+            height=500,
+            key="checklist_editor"
+        )
+        
+        # Update service dataframe if edited
+        if not edited_df.equals(df_display):
+            service.checklist_df = edited_df
+            st.session_state.checklist_df = edited_df
+    
+    with col_chat:
+        st.subheader("💬 Chat")
+        
+        # Row selector for chat
+        chat_row = st.selectbox(
+            "Discuss row:",
+            df.index.tolist(),
+            format_func=lambda x: f"Row {x}",
+            key="chat_row_selector"
+        )
+        
+        st.caption(f"**Question:** {service.get_question_from_row(chat_row)[:100]}...")
+        
+        # Chat History Key per row
+        chat_key = f"chat_history_{chat_row}"
+        if chat_key not in st.session_state:
+            st.session_state[chat_key] = []
+        
+        # Chat container with fixed height
+        chat_container = st.container(height=400)
+        
+        with chat_container:
+            # Display History
+            for msg in st.session_state[chat_key]:
+                with st.chat_message(msg["role"]):
+                    st.write(msg["content"])
+        
+        # Chat Input (always visible at bottom)
+        if prompt := st.chat_input("Ask about this item..."):
+            logger.info(f"User chat for row {chat_row}", prompt[:100])
             
-            st.caption(f"**Question:** {service.get_question_from_row(chat_row)[:100]}...")
+            # Add user message
+            st.session_state[chat_key].append({"role": "user", "content": prompt})
             
-            # Chat History Key per row
-            chat_key = f"chat_history_{chat_row}"
-            if chat_key not in st.session_state:
-                st.session_state[chat_key] = []
+            # Get Agent Response
+            with st.spinner("Thinking..."):
+                response = service.chat_with_row(chat_row, prompt)
             
-            # Chat container with fixed height
-            chat_container = st.container(height=400)
-            
-            with chat_container:
-                # Display History
-                for msg in st.session_state[chat_key]:
-                    with st.chat_message(msg["role"]):
-                        st.write(msg["content"])
-            
-            # Chat Input (always visible at bottom)
-            if prompt := st.chat_input("Ask about this item..."):
-                logger.info(f"User chat for row {chat_row}", prompt[:100])
-                
-                # Add user message
-                st.session_state[chat_key].append({"role": "user", "content": prompt})
-                
-                # Get Agent Response
-                with st.spinner("Thinking..."):
-                    response = service.chat_with_row(chat_row, prompt)
-                
-                # Add agent message
-                st.session_state[chat_key].append({"role": "assistant", "content": response})
-                st.rerun()
+            # Add agent message
+            st.session_state[chat_key].append({"role": "assistant", "content": response})
+            st.rerun()
 
 else:
     st.info("👈 Please upload a checklist to begin.")
@@ -379,7 +381,7 @@ else:
         ### Required Columns
         Your Excel file should have:
         - **ID Column**: `ID`, `Item_ID`, `Number`, `No`, or `#`
-        - **Question Column**: `Question`, `Requirement`, `Item`, `Description`, or `Check`
+        - **Question Column**: `Question`, `Requirement`, `Item`, `Description`, `Check`, or `Domanda`
         
         ### Example
         | ID | Question | Status |
