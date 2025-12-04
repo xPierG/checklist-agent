@@ -1,0 +1,6 @@
+ID,Question,Category
+1,Is there a designated Data Protection Officer (DPO) appointed?,Data Protection
+2,Are access controls to personal data documented and enforced?,Security
+3,Is there a documented data retention policy in place?,Governance
+4,Are data processing activities recorded in a register?,Compliance
+5,Have data protection impact assessments been conducted?,Risk Management

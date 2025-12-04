@@ -43,18 +43,101 @@ class ComplianceService:
         return self.pdf_uri
 
     def load_checklist(self, file_path: str) -> pd.DataFrame:
-        """Loads Excel checklist."""
+        """
+        Loads Excel checklist with flexible column detection.
+        Looks for ID and Question columns using common naming patterns.
+        """
         # Force all columns to be strings to avoid PyArrow inference issues
         self.checklist_df = pd.read_excel(file_path, dtype=str)
         # Replace "nan" strings with empty string if any
         self.checklist_df = self.checklist_df.replace("nan", "")
+        
+        # Detect ID column (case-insensitive)
+        id_patterns = ['id', 'item_id', 'item id', 'number', 'no', '#']
+        id_col = None
+        for col in self.checklist_df.columns:
+            if col.lower().strip() in id_patterns:
+                id_col = col
+                break
+        
+        # Detect Question column (case-insensitive)
+        question_patterns = ['question', 'requirement', 'item', 'description', 'check']
+        question_col = None
+        for col in self.checklist_df.columns:
+            if col.lower().strip() in question_patterns:
+                question_col = col
+                break
+        
+        # Store column mappings
+        self.id_column = id_col
+        self.question_column = question_col
         
         # Add status columns if missing
         required_cols = ['AI_Proposal', 'Discussion_Log', 'Final_Answer', 'Status']
         for col in required_cols:
             if col not in self.checklist_df.columns:
                 self.checklist_df[col] = ""
+        
+        # Initialize Status to PENDING if empty
+        if 'Status' in self.checklist_df.columns:
+            self.checklist_df['Status'] = self.checklist_df['Status'].replace('', 'PENDING')
+        
         return self.checklist_df
+    
+    def get_question_from_row(self, row_index: int) -> str:
+        """Extract question text from a row using detected column."""
+        if self.question_column and self.question_column in self.checklist_df.columns:
+            return str(self.checklist_df.at[row_index, self.question_column])
+        # Fallback: try to find any column that looks like a question
+        for col in self.checklist_df.columns:
+            if col not in ['AI_Proposal', 'Discussion_Log', 'Final_Answer', 'Status', self.id_column]:
+                return str(self.checklist_df.at[row_index, col])
+        return "No question found"
+    
+    def batch_analyze(self, max_items: int = 3) -> Dict[str, Any]:
+        """
+        Analyzes the first N items in the checklist in batch.
+        Returns a summary of results.
+        """
+        if self.checklist_df is None:
+            return {"error": "No checklist loaded"}
+        
+        if not self.pdf_uri:
+            return {"error": "No PDF loaded"}
+        
+        results = []
+        total_items = min(max_items, len(self.checklist_df))
+        
+        for idx in range(total_items):
+            # Skip if already processed
+            if self.checklist_df.at[idx, 'Status'] not in ['PENDING', '']:
+                continue
+                
+            question = self.get_question_from_row(idx)
+            item_id = self.checklist_df.at[idx, self.id_column] if self.id_column else str(idx)
+            
+            try:
+                response = self.analyze_row(idx, question)
+                results.append({
+                    "index": idx,
+                    "id": item_id,
+                    "question": question,
+                    "response": response,
+                    "status": "success"
+                })
+            except Exception as e:
+                results.append({
+                    "index": idx,
+                    "id": item_id,
+                    "question": question,
+                    "error": str(e),
+                    "status": "error"
+                })
+        
+        return {
+            "total_processed": len(results),
+            "results": results
+        }
 
     def _get_or_create_session(self, user_id: str, session_id: str):
         """Helper to ensure session exists."""

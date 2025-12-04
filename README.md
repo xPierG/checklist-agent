@@ -46,10 +46,27 @@ Run the Streamlit application:
 streamlit run app.py
 ```
 
+### Processing Modes
+
+#### Single Item Mode
 1.  **Upload PDF**: Upload the policy or technical document you want to audit.
 2.  **Upload Checklist**: Upload an Excel file containing the audit questions.
 3.  **Analyze**: Select a row and click "Analyze" to get an initial AI assessment.
 4.  **Chat**: Use the chat interface to ask follow-up questions or request more evidence.
+
+#### Batch Mode (First 3 Items)
+1.  **Upload PDF and Checklist**: Same as above.
+2.  **Select Batch Mode**: Choose "Batch (First 3)" in the sidebar.
+3.  **Start Batch**: Click "Start Batch Analysis" to process the first 3 pending items automatically.
+4.  **Review Results**: Expand each item to see the AI's assessment.
+
+### Checklist Format
+
+Your Excel file should contain:
+- **ID Column**: `ID`, `Item_ID`, `Number`, `No`, or `#`
+- **Question Column**: `Question`, `Requirement`, `Item`, `Description`, or `Check`
+
+The system will auto-detect these columns. See `CHECKLIST_FORMAT.md` for full details and `example_checklist.csv` for a sample.
 
 ## Architecture
 
@@ -59,3 +76,11 @@ streamlit run app.py
     *   `Orchestrator`: Manages the workflow.
     *   `Librarian`: Finds information in the PDF.
     *   `Auditor`: Evaluates compliance based on evidence.
+
+## Features
+
+*   **Flexible Column Detection**: Automatically detects ID and Question columns using common naming patterns
+*   **Batch Processing**: Process multiple checklist items at once
+*   **Dual-Mode Interface**: Switch between single-item and batch processing
+*   **Contextual Chat**: Discuss specific items with the AI agent
+*   **Status Tracking**: Track progress with PENDING/DRAFT/APPROVED states
