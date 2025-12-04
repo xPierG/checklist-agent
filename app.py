@@ -215,17 +215,37 @@ if "checklist_df" in st.session_state:
             col_b1, col_b2 = st.columns(2)
             with col_b1:
                 if st.button("▶️ Start Batch", width="stretch", disabled=len(rows_to_process)==0):
-                    with st.spinner(f"Analyzing {len(rows_to_process)} rows..."):
-                        for idx in rows_to_process:
-                            question = service.get_question_from_row(idx)
-                            service.analyze_row(idx, question)
-                            # Add delay to avoid rate limiting
-                            if idx != rows_to_process[-1]:
-                                time.sleep(2)
-                        st.session_state.checklist_df = service.get_dataframe()
-                        st.session_state.show_batch_dialog = False
-                        st.success(f"✅ Analyzed {len(rows_to_process)} rows")
-                        st.rerun()
+                    # Create progress containers
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+                    
+                    total = len(rows_to_process)
+                    for i, idx in enumerate(rows_to_process, 1):
+                        question = service.get_question_from_row(idx)
+                        question_preview = question[:60] + "..." if len(question) > 60 else question
+                        
+                        # Update status
+                        status_text.info(f"🔍 Analyzing row {idx} ({i}/{total}): {question_preview}")
+                        
+                        # Analyze
+                        service.analyze_row(idx, question)
+                        
+                        # Update progress
+                        progress_bar.progress(i / total)
+                        
+                        # Add delay to avoid rate limiting (except for last item)
+                        if i < total:
+                            status_text.warning(f"⏳ Rate limit delay (2s)... Next: row {rows_to_process[i]}")
+                            time.sleep(2)
+                    
+                    # Complete
+                    progress_bar.progress(1.0)
+                    status_text.success(f"✅ Completed! Analyzed {total} rows")
+                    
+                    st.session_state.checklist_df = service.get_dataframe()
+                    st.session_state.show_batch_dialog = False
+                    time.sleep(1)  # Let user see completion message
+                    st.rerun()
             
             with col_b2:
                 if st.button("❌ Cancel", width="stretch"):
@@ -331,17 +351,18 @@ if "checklist_df" in st.session_state:
             st.session_state.checklist_df = edited_df
     
     with col_chat:
-        st.subheader("💬 Chat")
+        st.subheader("💬 Ask Questions")
         
         # Row selector for chat
         chat_row = st.selectbox(
-            "Discuss row:",
+            "About row:",
             df.index.tolist(),
             format_func=lambda x: f"Row {x}",
             key="chat_row_selector"
         )
         
         st.caption(f"**Question:** {service.get_question_from_row(chat_row)[:100]}...")
+        st.caption("💡 Ask about: the checklist question, what context docs say, what target docs contain")
         
         # Chat History Key per row
         chat_key = f"chat_history_{chat_row}"
@@ -349,7 +370,7 @@ if "checklist_df" in st.session_state:
             st.session_state[chat_key] = []
         
         # Chat container with fixed height
-        chat_container = st.container(height=400)
+        chat_container = st.container(height=350)
         
         with chat_container:
             # Display History

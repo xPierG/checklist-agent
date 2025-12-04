@@ -210,11 +210,90 @@ class ComplianceService:
                     "status": "error"
                 })
         
-        logger.success(f"Batch analysis complete", f"Processed {len(results)} items")
+        logger.success(f"Batch analysis complete", f"Processed {len(results)}        
         return {
-            "total_processed": len(results),
+            "total_processed": processed_count,
             "results": results
         }
+    
+    def chat_with_row(self, row_index: int, user_message: str) -> str:
+        """
+        Chat about a specific checklist row.
+        Provides context about the question, what context documents say, and what target documents contain.
+        """
+        logger.info(f"Chat for row {row_index}", user_message[:100])
+        
+        if not self.target_pdf_uris:
+            return "⚠️ No target documents loaded. Please upload documents to analyze."
+        
+        question = self.get_question_from_row(row_index)
+        
+        # Build context for chat
+        context_docs = "\n".join([f"  - {uri}" for uri in self.context_pdf_uris]) if self.context_pdf_uris else "  (None)"
+        target_docs = "\n".join([f"  - {uri}" for uri in self.target_pdf_uris])
+        
+        # Get current analysis if available
+        current_analysis = ""
+        if 'Risposta' in self.checklist_df.columns:
+            risposta = self.checklist_df.at[row_index, 'Risposta']
+            confidenza = self.checklist_df.at[row_index, 'Confidenza']
+            giustificazione = self.checklist_df.at[row_index, 'Giustificazione']
+            
+            if pd.notna(risposta):
+                current_analysis = f"""
+Current AI Analysis:
+- Answer: {risposta}
+- Confidence: {confidenza}
+- Justification: {giustificazione}
+"""
+        
+        chat_prompt = f"""
+You are a helpful compliance assistant. The user is asking about a specific checklist item.
+
+CONTEXT DOCUMENTS (Regulations/Rules):
+{context_docs}
+
+TARGET DOCUMENTS (Being Analyzed):
+{target_docs}
+
+CHECKLIST QUESTION: {question}
+
+{current_analysis}
+
+USER QUESTION: {user_message}
+
+Provide a helpful answer that:
+1. Explains what the CONTEXT documents say about this topic (if available)
+2. Explains what the TARGET documents contain related to this topic
+3. Answers the user's specific question
+4. Uses actual text snippets when possible
+
+Be conversational and helpful. If you need to search the documents, do so and provide specific quotes.
+"""
+        
+        user_id = "user_default"
+        session_id = f"chat_row_{row_index}"
+        
+        self._get_or_create_session(user_id, session_id)
+        
+        content = types.Content(role='user', parts=[types.Part(text=chat_prompt)])
+        
+        try:
+            response = asyncio.run(
+                self.orchestrator.send_message(
+                    user_id=user_id,
+                    session_id=session_id,
+                    content=content
+                )
+            )
+            
+            response_text = response.parts[0].text if response.parts else "No response"
+            logger.success(f"Chat response for row {row_index}", response_text[:100])
+            return response_text
+            
+        except Exception as e:
+            logger.error(f"Chat failed for row {row_index}", str(e))
+            return f"Error: {str(e)}"
 
     def _get_or_create_session(self, user_id: str, session_id: str):
         """Helper to ensure session exists."""
