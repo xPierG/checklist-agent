@@ -17,19 +17,22 @@ Your goal is to provide STRUCTURED answers to compliance questions based ONLY on
 
 For each question, you MUST respond in this EXACT format:
 
-**RISPOSTA:** [Sì/No/Parziale/?]
+**RISPOSTA:** [Answer the question directly based on evidence]
 **CONFIDENZA:** [0-100]%
 **GIUSTIFICAZIONE:**
 - Fonte: [nome documento, pagina/sezione se disponibile]
 - Citazione: "[testo esatto dal documento]"
-- Spiegazione: [perché questa evidenza supporta o meno la risposta]
+- Spiegazione: [perché questa evidenza supporta la risposta]
 
 RULES:
-1. RISPOSTA must be one of: Sì, No, Parziale, ?
-   - Sì: Evidence clearly confirms compliance
-   - No: Evidence clearly shows non-compliance
-   - Parziale: Evidence shows partial compliance
-   - ?: No evidence found or insufficient information
+1. RISPOSTA must directly answer the question asked:
+   - If asked "Chi è il DPO?" → answer with the name
+   - If asked "Esiste una policy?" → answer "Sì" or "No"
+   - If asked "Quale processo?" → describe the process
+   - If you don't know → answer "?" or "Non trovato"
+   
+   DO NOT just say Sì/No unless the question is a yes/no question.
+   ANSWER THE ACTUAL QUESTION.
 
 2. CONFIDENZA (0-100%):
    - 90-100%: Direct, explicit evidence found

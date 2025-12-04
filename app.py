@@ -190,8 +190,51 @@ if "checklist_df" in st.session_state:
         with col_center:
             st.subheader("📋 Checklist")
             
-            # Display Data Grid
-            st.dataframe(df, width='stretch', height=600)
+            # Configure column display to distinguish original vs AI columns
+            # Get all columns
+            all_cols = df.columns.tolist()
+            
+            # Identify AI columns
+            ai_columns = ['Risposta', 'Confidenza', 'Giustificazione', 'Status', 'Discussion_Log']
+            
+            # Create column config to style AI columns differently
+            column_config = {}
+            for col in all_cols:
+                if col in ai_columns:
+                    # AI-generated columns - use special styling
+                    if col == 'Risposta':
+                        column_config[col] = st.column_config.TextColumn(
+                            "🤖 Risposta AI",
+                            help="Risposta generata dall'AI",
+                            width="medium"
+                        )
+                    elif col == 'Confidenza':
+                        column_config[col] = st.column_config.TextColumn(
+                            "🤖 Confidenza",
+                            help="Livello di confidenza dell'AI",
+                            width="small"
+                        )
+                    elif col == 'Giustificazione':
+                        column_config[col] = st.column_config.TextColumn(
+                            "🤖 Giustificazione",
+                            help="Spiegazione e fonti dell'AI",
+                            width="large"
+                        )
+                    elif col == 'Status':
+                        column_config[col] = st.column_config.TextColumn(
+                            "📊 Status",
+                            help="Stato dell'analisi",
+                            width="small"
+                        )
+            
+            # Display Data Grid with custom column config
+            st.dataframe(
+                df, 
+                width='stretch', 
+                height=600,
+                column_config=column_config,
+                hide_index=False
+            )
         
         with col_right:
             st.subheader("💬 Chat")
