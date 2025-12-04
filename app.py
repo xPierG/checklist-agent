@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import os
 from services.compliance_service import ComplianceService
+from utils.logger import logger
 
 # Page Config
 st.set_page_config(layout="wide", page_title="ADK Compliance Agent")
@@ -16,6 +17,10 @@ if "service" not in st.session_state:
         st.stop()
 
 service = st.session_state.service
+
+# Initialize selected row
+if "selected_row" not in st.session_state:
+    st.session_state.selected_row = 0
 
 # Sidebar
 with st.sidebar:
@@ -62,13 +67,39 @@ with st.sidebar:
         ["Single Item", "Batch (First 3)"],
         help="Single: Analyze one item at a time. Batch: Process first 3 pending items."
     )
+    
+    # Activity Monitor
+    st.markdown("---")
+    st.subheader("📊 Activity Log")
+    
+    with st.expander("Recent Activity", expanded=False):
+        activities = logger.get_recent_activities(limit=10)
+        if activities:
+            for activity in activities:
+                level = activity['level']
+                emoji = {
+                    "INFO": "ℹ️",
+                    "SUCCESS": "✅",
+                    "WARNING": "⚠️",
+                    "ERROR": "❌"
+                }.get(level, "•")
+                
+                st.markdown(f"{emoji} **{activity['timestamp']}** - {activity['message']}")
+                if activity.get('details'):
+                    st.caption(activity['details'])
+        else:
+            st.info("No recent activity")
+    
+    if st.button("Clear Activity Log", use_container_width=True):
+        logger.clear_activities()
+        st.rerun()
 
-# Main Area
+# Main Area - 3 Column Layout
 if "checklist_df" in st.session_state:
     df = st.session_state.checklist_df
     
     if mode == "Batch (First 3)":
-        # Batch Mode
+        # Batch Mode (full width)
         st.header("📦 Batch Processing Mode")
         
         st.info("This will analyze the first 3 PENDING items in your checklist. Processing includes 2-second delays between items to respect API rate limits (~6 seconds total).")
@@ -108,47 +139,73 @@ if "checklist_df" in st.session_state:
         st.dataframe(df, width='stretch')
     
     else:
-        # Single Item Mode
-        col1, col2 = st.columns([2, 1])
+        # Single Item Mode - 3 Column Layout
+        col_left, col_center, col_right = st.columns([1, 2, 2])
         
-        with col1:
+        with col_left:
+            st.subheader("🎯 Row Selection")
+            
+            # Row selector
+            row_indices = df.index.tolist()
+            selected_row = st.selectbox(
+                "Select Row:",
+                row_indices,
+                index=st.session_state.selected_row if st.session_state.selected_row < len(row_indices) else 0,
+                key="row_selector"
+            )
+            st.session_state.selected_row = selected_row
+            
+            # Show selected row details
+            if selected_row is not None:
+                st.markdown("---")
+                st.markdown("**Selected Item:**")
+                if service.id_column:
+                    st.caption(f"ID: {df.at[selected_row, service.id_column]}")
+                st.caption(f"Status: {df.at[selected_row, 'Status']}")
+                
+                question = service.get_question_from_row(selected_row)
+                st.markdown(f"**Question:**")
+                st.info(question)
+                
+                if st.button("🔍 Analyze This Row", use_container_width=True, type="primary"):
+                    logger.info(f"User requested analysis for row {selected_row}")
+                    with st.spinner("Agent is analyzing..."):
+                        response = service.analyze_row(selected_row, question)
+                        st.session_state.checklist_df = service.get_dataframe()
+                        st.rerun()
+        
+        with col_center:
             st.subheader("📋 Checklist")
             
             # Display Data Grid
-            st.dataframe(df, width='stretch')
+            st.dataframe(df, width='stretch', height=600)
+        
+        with col_right:
+            st.subheader("💬 Chat")
             
-            # Row Selection
-            row_indices = df.index.tolist()
-            selected_row = st.selectbox("Select Row to Analyze/Discuss", row_indices)
-            
-            if st.button("🔍 Analyze Selected Row"):
-                question = service.get_question_from_row(selected_row)
-                with st.spinner("Agent is analyzing..."):
-                    response = service.analyze_row(selected_row, question)
-                    st.session_state.checklist_df = service.get_dataframe() # Refresh
-                    st.rerun()
-
-        with col2:
-            st.subheader("💬 Contextual Chat")
             if selected_row is not None:
-                st.info(f"Discussing Row {selected_row}")
+                st.caption(f"Discussing Row {selected_row}")
                 
                 # Chat History Key per row
                 chat_key = f"chat_history_{selected_row}"
                 if chat_key not in st.session_state:
                     st.session_state[chat_key] = []
                 
-                # Display History
-                for msg in st.session_state[chat_key]:
-                    with st.chat_message(msg["role"]):
-                        st.write(msg["content"])
+                # Chat container with fixed height
+                chat_container = st.container(height=500)
                 
-                # Chat Input
+                with chat_container:
+                    # Display History
+                    for msg in st.session_state[chat_key]:
+                        with st.chat_message(msg["role"]):
+                            st.write(msg["content"])
+                
+                # Chat Input (always visible at bottom)
                 if prompt := st.chat_input("Ask about this compliance item..."):
+                    logger.info(f"User chat for row {selected_row}", prompt[:100])
+                    
                     # Add user message
                     st.session_state[chat_key].append({"role": "user", "content": prompt})
-                    with st.chat_message("user"):
-                        st.write(prompt)
                     
                     # Get Agent Response
                     with st.spinner("Thinking..."):
@@ -156,8 +213,7 @@ if "checklist_df" in st.session_state:
                     
                     # Add agent message
                     st.session_state[chat_key].append({"role": "assistant", "content": response})
-                    with st.chat_message("assistant"):
-                        st.write(response)
+                    st.rerun()
 
 else:
     st.info("👈 Please upload a checklist to begin.")
@@ -178,4 +234,3 @@ else:
         
         See `CHECKLIST_FORMAT.md` for full details.
         """)
-

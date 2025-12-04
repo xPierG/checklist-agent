@@ -11,6 +11,7 @@ from google.genai import types
 
 from agents.orchestrator import create_orchestrator_agent
 from utils.pdf_loader import PDFLoader
+from utils.logger import logger
 
 # Load environment variables
 load_dotenv()
@@ -21,14 +22,17 @@ class ComplianceService:
     Handles session management, file loading, and agent execution.
     """
     def __init__(self):
+        logger.info("Initializing ComplianceService")
         api_key = os.environ.get("GOOGLE_API_KEY")
         if not api_key:
+            logger.error("GOOGLE_API_KEY not found in environment")
             raise ValueError("GOOGLE_API_KEY environment variable not set")
         
         self.client = Client(api_key=api_key)
         self.pdf_loader = PDFLoader(self.client)
         
         # ADK Setup
+        logger.info("Setting up ADK agents")
         self.agent = create_orchestrator_agent()
         self.runner = InMemoryRunner(self.agent, app_name="agents")
         self.session_service = self.runner.session_service
@@ -37,11 +41,19 @@ class ComplianceService:
         self.checklist_df = None
         self.pdf_uri = None
         self.current_session_id = None
+        
+        logger.success("ComplianceService initialized successfully")
 
     def load_pdf(self, file_path: str) -> str:
         """Uploads PDF and returns URI."""
-        self.pdf_uri = self.pdf_loader.upload_and_cache(file_path)
-        return self.pdf_uri
+        logger.info(f"Loading PDF: {os.path.basename(file_path)}")
+        try:
+            self.pdf_uri = self.pdf_loader.upload_and_cache(file_path)
+            logger.success(f"PDF uploaded successfully", f"URI: {self.pdf_uri}")
+            return self.pdf_uri
+        except Exception as e:
+            logger.error(f"Failed to upload PDF", str(e))
+            raise
 
     def load_checklist(self, file_path: str) -> pd.DataFrame:
         """
@@ -100,22 +112,30 @@ class ComplianceService:
         Analyzes the first N items in the checklist in batch.
         Returns a summary of results.
         """
+        logger.info(f"Starting batch analysis", f"Max items: {max_items}")
+        
         if self.checklist_df is None:
+            logger.error("Batch analysis failed: No checklist loaded")
             return {"error": "No checklist loaded"}
         
         if not self.pdf_uri:
+            logger.error("Batch analysis failed: No PDF loaded")
             return {"error": "No PDF loaded"}
         
         results = []
         total_items = min(max_items, len(self.checklist_df))
+        logger.info(f"Processing {total_items} items")
         
         for idx in range(total_items):
             # Skip if already processed
             if self.checklist_df.at[idx, 'Status'] not in ['PENDING', '']:
+                logger.info(f"Skipping item {idx}", "Already processed")
                 continue
                 
             question = self.get_question_from_row(idx)
             item_id = self.checklist_df.at[idx, self.id_column] if self.id_column else str(idx)
+            
+            logger.info(f"Analyzing item {item_id}", question[:100])
             
             try:
                 response = self.analyze_row(idx, question)
@@ -126,12 +146,15 @@ class ComplianceService:
                     "response": response,
                     "status": "success"
                 })
+                logger.success(f"Item {item_id} analyzed successfully")
                 
                 # Add delay between items to avoid rate limiting
                 if idx < total_items - 1:  # Don't delay after last item
+                    logger.info("Waiting 2s to avoid rate limiting")
                     time.sleep(2)
                     
             except Exception as e:
+                logger.error(f"Failed to analyze item {item_id}", str(e))
                 results.append({
                     "index": idx,
                     "id": item_id,
@@ -140,6 +163,7 @@ class ComplianceService:
                     "status": "error"
                 })
         
+        logger.success(f"Batch analysis complete", f"Processed {len(results)} items")
         return {
             "total_processed": len(results),
             "results": results

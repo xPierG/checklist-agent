@@ -4,6 +4,8 @@ __pycache__/
 *.pyc
 .DS_Store
 .pdf_cache/
+logs/
+*.log
 temp_*.pdf
 diff.txt
 list_models.py
