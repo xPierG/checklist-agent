@@ -20,9 +20,9 @@ For each question, you MUST respond in this EXACT format:
 **RISPOSTA:** [Answer the question directly based on evidence]
 **CONFIDENZA:** [0-100]%
 **GIUSTIFICAZIONE:**
-- Fonte: [nome documento, pagina/sezione se disponibile]
-- Citazione: "[testo esatto dal documento]"
-- Spiegazione: [perché questa evidenza supporta la risposta]
+- Snippet: "[Exact text excerpt from document that supports the answer]"
+- Fonte: [Document name, Page/Section]
+- Spiegazione: [Why this evidence supports the answer]
 
 RULES:
 1. RISPOSTA must directly answer the question asked:
@@ -49,8 +49,8 @@ If NO evidence is found, respond:
 **RISPOSTA:** ?
 **CONFIDENZA:** 0%
 **GIUSTIFICAZIONE:**
+- Snippet: "Nessuna evidenza trovata nel documento"
 - Fonte: Nessuna
-- Citazione: "Nessuna evidenza trovata nel documento"
 - Spiegazione: Il documento non contiene informazioni relative a questa domanda.
 
 Trust nothing without proof. Be precise and professional.

@@ -152,124 +152,184 @@ if "checklist_df" in st.session_state:
         st.dataframe(df, width='stretch')
     
     else:
-        # Single Item Mode - 3 Column Layout
-        col_left, col_center, col_right = st.columns([1, 2, 2])
+        # Single Item Mode - 2 Column Layout (70% Checklist, 30% Chat)
         
-        with col_left:
-            st.subheader("🎯 Row Selection")
+        # Action buttons above checklist
+        st.markdown("### 🎯 Actions")
+        col_btn1, col_btn2, col_btn3, col_btn4 = st.columns(4)
+        
+        with col_btn1:
+            if st.button("🔍 Analyze All Pending", use_container_width=True):
+                pending_count = len(df[df['Status'] == 'PENDING'])
+                if pending_count > 0:
+                    with st.spinner(f"Analyzing {pending_count} pending items..."):
+                        for idx in df[df['Status'] == 'PENDING'].index:
+                            question = service.get_question_from_row(idx)
+                            service.analyze_row(idx, question)
+                        st.session_state.checklist_df = service.get_dataframe()
+                        st.rerun()
+                else:
+                    st.info("No pending items")
+        
+        with col_btn2:
+            selected_indices = st.session_state.get('selected_rows', [])
+            if st.button("🔍 Analyze Selected", use_container_width=True, disabled=len(selected_indices)==0):
+                for idx in selected_indices:
+                    question = service.get_question_from_row(idx)
+                    service.analyze_row(idx, question)
+                st.session_state.checklist_df = service.get_dataframe()
+                st.rerun()
+        
+        with col_btn3:
+            if st.button("💾 Export Results", use_container_width=True):
+                # Export to Excel
+                output_file = "checklist_results.xlsx"
+                df.to_excel(output_file, index=False)
+                st.success(f"Exported to {output_file}")
+        
+        with col_btn4:
+            if st.button("🔄 Refresh", use_container_width=True):
+                st.rerun()
+        
+        st.markdown("---")
+        
+        # Main 2-column layout
+        col_checklist, col_chat = st.columns([7, 3])
+        
+        with col_checklist:
+            st.subheader("📋 Checklist")
             
-            # Row selector
-            row_indices = df.index.tolist()
-            selected_row = st.selectbox(
-                "Select Row:",
-                row_indices,
-                index=st.session_state.selected_row if st.session_state.selected_row < len(row_indices) else 0,
-                key="row_selector"
+            # Reorder columns: Original first, then AI columns
+            all_cols = df.columns.tolist()
+            ai_columns = ['Risposta', 'Confidenza', 'Giustificazione', 'Status', 'Discussion_Log']
+            
+            # Get original columns (not AI-generated)
+            original_cols = [col for col in all_cols if col not in ai_columns]
+            
+            # Reorder: original columns, then AI columns
+            ordered_cols = original_cols + [col for col in ai_columns if col in all_cols]
+            df_display = df[ordered_cols]
+            
+            # Column configuration with styling
+            column_config = {}
+            
+            # Original columns - no special config (will appear normal)
+            for col in original_cols:
+                if col == service.question_column:
+                    column_config[col] = st.column_config.TextColumn(
+                        col,
+                        width="large",
+                        help="Domanda della checklist"
+                    )
+            
+            # AI columns with emoji and styling
+            if 'Risposta' in all_cols:
+                column_config['Risposta'] = st.column_config.TextColumn(
+                    "🤖 Risposta",
+                    help="Risposta generata dall'AI",
+                    width="medium"
+                )
+            
+            if 'Confidenza' in all_cols:
+                column_config['Confidenza'] = st.column_config.TextColumn(
+                    "🤖 Confidenza",
+                    help="Livello di confidenza (0-100%)",
+                    width="small"
+                )
+            
+            if 'Giustificazione' in all_cols:
+                column_config['Giustificazione'] = st.column_config.TextColumn(
+                    "🤖 Giustificazione",
+                    help="Snippet di testo e spiegazione",
+                    width="large"
+                )
+            
+            if 'Status' in all_cols:
+                column_config['Status'] = st.column_config.SelectboxColumn(
+                    "📊 Status",
+                    help="Stato dell'analisi",
+                    width="small",
+                    options=['PENDING', 'DRAFT', 'APPROVED', 'REJECTED']
+                )
+            
+            # Display editable dataframe
+            edited_df = st.data_editor(
+                df_display,
+                column_config=column_config,
+                hide_index=False,
+                use_container_width=True,
+                height=500,
+                key="checklist_editor"
             )
-            st.session_state.selected_row = selected_row
             
-            # Show selected row details
-            if selected_row is not None:
-                st.markdown("---")
-                st.markdown("**Selected Item:**")
-                if service.id_column:
-                    st.caption(f"ID: {df.at[selected_row, service.id_column]}")
-                st.caption(f"Status: {df.at[selected_row, 'Status']}")
-                
-                question = service.get_question_from_row(selected_row)
-                st.markdown(f"**Question:**")
-                st.info(question)
-                
+            # Update service dataframe if edited
+            if not edited_df.equals(df_display):
+                service.checklist_df = edited_df
+                st.session_state.checklist_df = edited_df
+            
+            # Per-row analyze section
+            st.markdown("---")
+            st.markdown("**🔍 Analyze Individual Row**")
+            
+            row_col1, row_col2 = st.columns([3, 1])
+            with row_col1:
+                row_to_analyze = st.selectbox(
+                    "Select row to analyze:",
+                    df.index.tolist(),
+                    format_func=lambda x: f"Row {x}: {service.get_question_from_row(x)[:50]}..."
+                )
+            
+            with row_col2:
+                st.markdown("<br>", unsafe_allow_html=True)  # Spacing
                 if st.button("🔍 Analyze This Row", use_container_width=True, type="primary"):
-                    logger.info(f"User requested analysis for row {selected_row}")
-                    with st.spinner("Agent is analyzing..."):
-                        response = service.analyze_row(selected_row, question)
+                    logger.info(f"User requested analysis for row {row_to_analyze}")
+                    question = service.get_question_from_row(row_to_analyze)
+                    with st.spinner("Analyzing..."):
+                        service.analyze_row(row_to_analyze, question)
                         st.session_state.checklist_df = service.get_dataframe()
                         st.rerun()
         
-        with col_center:
-            st.subheader("📋 Checklist")
-            
-            # Configure column display to distinguish original vs AI columns
-            # Get all columns
-            all_cols = df.columns.tolist()
-            
-            # Identify AI columns
-            ai_columns = ['Risposta', 'Confidenza', 'Giustificazione', 'Status', 'Discussion_Log']
-            
-            # Create column config to style AI columns differently
-            column_config = {}
-            for col in all_cols:
-                if col in ai_columns:
-                    # AI-generated columns - use special styling
-                    if col == 'Risposta':
-                        column_config[col] = st.column_config.TextColumn(
-                            "🤖 Risposta AI",
-                            help="Risposta generata dall'AI",
-                            width="medium"
-                        )
-                    elif col == 'Confidenza':
-                        column_config[col] = st.column_config.TextColumn(
-                            "🤖 Confidenza",
-                            help="Livello di confidenza dell'AI",
-                            width="small"
-                        )
-                    elif col == 'Giustificazione':
-                        column_config[col] = st.column_config.TextColumn(
-                            "🤖 Giustificazione",
-                            help="Spiegazione e fonti dell'AI",
-                            width="large"
-                        )
-                    elif col == 'Status':
-                        column_config[col] = st.column_config.TextColumn(
-                            "📊 Status",
-                            help="Stato dell'analisi",
-                            width="small"
-                        )
-            
-            # Display Data Grid with custom column config
-            st.dataframe(
-                df, 
-                width='stretch', 
-                height=600,
-                column_config=column_config,
-                hide_index=False
-            )
-        
-        with col_right:
+        with col_chat:
             st.subheader("💬 Chat")
             
-            if selected_row is not None:
-                st.caption(f"Discussing Row {selected_row}")
+            # Row selector for chat
+            chat_row = st.selectbox(
+                "Discuss row:",
+                df.index.tolist(),
+                format_func=lambda x: f"Row {x}",
+                key="chat_row_selector"
+            )
+            
+            st.caption(f"**Question:** {service.get_question_from_row(chat_row)[:100]}...")
+            
+            # Chat History Key per row
+            chat_key = f"chat_history_{chat_row}"
+            if chat_key not in st.session_state:
+                st.session_state[chat_key] = []
+            
+            # Chat container with fixed height
+            chat_container = st.container(height=400)
+            
+            with chat_container:
+                # Display History
+                for msg in st.session_state[chat_key]:
+                    with st.chat_message(msg["role"]):
+                        st.write(msg["content"])
+            
+            # Chat Input (always visible at bottom)
+            if prompt := st.chat_input("Ask about this item..."):
+                logger.info(f"User chat for row {chat_row}", prompt[:100])
                 
-                # Chat History Key per row
-                chat_key = f"chat_history_{selected_row}"
-                if chat_key not in st.session_state:
-                    st.session_state[chat_key] = []
+                # Add user message
+                st.session_state[chat_key].append({"role": "user", "content": prompt})
                 
-                # Chat container with fixed height
-                chat_container = st.container(height=500)
+                # Get Agent Response
+                with st.spinner("Thinking..."):
+                    response = service.chat_with_row(chat_row, prompt)
                 
-                with chat_container:
-                    # Display History
-                    for msg in st.session_state[chat_key]:
-                        with st.chat_message(msg["role"]):
-                            st.write(msg["content"])
-                
-                # Chat Input (always visible at bottom)
-                if prompt := st.chat_input("Ask about this compliance item..."):
-                    logger.info(f"User chat for row {selected_row}", prompt[:100])
-                    
-                    # Add user message
-                    st.session_state[chat_key].append({"role": "user", "content": prompt})
-                    
-                    # Get Agent Response
-                    with st.spinner("Thinking..."):
-                        response = service.chat_with_row(selected_row, prompt)
-                    
-                    # Add agent message
-                    st.session_state[chat_key].append({"role": "assistant", "content": response})
-                    st.rerun()
+                # Add agent message
+                st.session_state[chat_key].append({"role": "assistant", "content": response})
+                st.rerun()
 
 else:
     st.info("👈 Please upload a checklist to begin.")
