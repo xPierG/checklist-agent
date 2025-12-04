@@ -42,7 +42,7 @@ with st.sidebar:
     )
     
     if uploaded_context_pdfs:
-        if st.button("📤 Process Context PDFs", use_container_width=True, key="process_context"):
+        if st.button("📤 Process Context PDFs", width="stretch", key="process_context"):
             with st.spinner(f"Uploading {len(uploaded_context_pdfs)} context PDF(s)..."):
                 for uploaded_pdf in uploaded_context_pdfs:
                     temp_path = f"temp_{uploaded_pdf.name}"
@@ -75,7 +75,7 @@ with st.sidebar:
     )
     
     if uploaded_target_pdfs:
-        if st.button("📤 Process Target PDFs", use_container_width=True, key="process_target"):
+        if st.button("📤 Process Target PDFs", width="stretch", key="process_target"):
             with st.spinner(f"Uploading {len(uploaded_target_pdfs)} target PDF(s)..."):
                 for uploaded_pdf in uploaded_target_pdfs:
                     temp_path = f"temp_{uploaded_pdf.name}"
@@ -96,7 +96,7 @@ with st.sidebar:
     # Checklist Upload
     uploaded_excel = st.file_uploader("Checklist (Excel)", type=["xlsx", "xls", "csv"])
     if uploaded_excel:
-        if st.button("📊 Load Checklist", use_container_width=True):
+        if st.button("📊 Load Checklist", width="stretch"):
             df = service.load_checklist(uploaded_excel)
             st.session_state.checklist_df = df
             
@@ -140,7 +140,7 @@ with st.sidebar:
         else:
             st.info("No recent activity")
     
-    if st.button("Clear Activity Log", use_container_width=True):
+    if st.button("Clear Activity Log", width="stretch"):
         logger.clear_activities()
         st.rerun()
 
@@ -196,7 +196,7 @@ if "checklist_df" in st.session_state:
         col_btn1, col_btn2, col_btn3, col_btn4 = st.columns(4)
         
         with col_btn1:
-            if st.button("🔍 Analyze All Pending", use_container_width=True):
+            if st.button("🔍 Analyze All Pending", width="stretch"):
                 pending_count = len(df[df['Status'] == 'PENDING'])
                 if pending_count > 0:
                     with st.spinner(f"Analyzing {pending_count} pending items..."):
@@ -210,7 +210,7 @@ if "checklist_df" in st.session_state:
         
         with col_btn2:
             selected_indices = st.session_state.get('selected_rows', [])
-            if st.button("🔍 Analyze Selected", use_container_width=True, disabled=len(selected_indices)==0):
+            if st.button("🔍 Analyze Selected", width="stretch", disabled=len(selected_indices)==0):
                 for idx in selected_indices:
                     question = service.get_question_from_row(idx)
                     service.analyze_row(idx, question)
@@ -218,14 +218,14 @@ if "checklist_df" in st.session_state:
                 st.rerun()
         
         with col_btn3:
-            if st.button("💾 Export Results", use_container_width=True):
+            if st.button("💾 Export Results", width="stretch"):
                 # Export to Excel
                 output_file = "checklist_results.xlsx"
                 df.to_excel(output_file, index=False)
                 st.success(f"Exported to {output_file}")
         
         with col_btn4:
-            if st.button("🔄 Refresh", use_container_width=True):
+            if st.button("🔄 Refresh", width="stretch"):
                 st.rerun()
         
         st.markdown("---")
@@ -294,7 +294,7 @@ if "checklist_df" in st.session_state:
                 df_display,
                 column_config=column_config,
                 hide_index=False,
-                use_container_width=True,
+                width="stretch",
                 height=500,
                 key="checklist_editor"
             )
@@ -318,7 +318,7 @@ if "checklist_df" in st.session_state:
             
             with row_col2:
                 st.markdown("<br>", unsafe_allow_html=True)  # Spacing
-                if st.button("🔍 Analyze This Row", use_container_width=True, type="primary"):
+                if st.button("🔍 Analyze This Row", width="stretch", type="primary"):
                     logger.info(f"User requested analysis for row {row_to_analyze}")
                     question = service.get_question_from_row(row_to_analyze)
                     with st.spinner("Analyzing..."):
