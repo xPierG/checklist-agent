@@ -60,6 +60,8 @@ class ComplianceService:
         Loads Excel checklist with flexible column detection.
         Looks for ID and Question columns using common naming patterns.
         """
+        logger.info(f"Loading checklist: {os.path.basename(file_path)}")
+        
         # Force all columns to be strings to avoid PyArrow inference issues
         self.checklist_df = pd.read_excel(file_path, dtype=str)
         # Replace "nan" strings with empty string if any
@@ -74,7 +76,7 @@ class ComplianceService:
                 break
         
         # Detect Question column (case-insensitive)
-        question_patterns = ['question', 'requirement', 'item', 'description', 'check']
+        question_patterns = ['question', 'requirement', 'item', 'description', 'check', 'domanda']
         question_col = None
         for col in self.checklist_df.columns:
             if col.lower().strip() in question_patterns:
@@ -85,16 +87,26 @@ class ComplianceService:
         self.id_column = id_col
         self.question_column = question_col
         
-        # Add status columns if missing
-        required_cols = ['AI_Proposal', 'Discussion_Log', 'Final_Answer', 'Status']
-        for col in required_cols:
+        logger.info(f"Detected columns", f"ID: {id_col}, Question: {question_col}")
+        
+        # Add status columns if missing - UPDATED for structured responses
+        required_cols = {
+            'Risposta': '',           # Sì/No/Parziale/?
+            'Confidenza': '',         # 0-100%
+            'Giustificazione': '',    # Full justification
+            'Status': 'PENDING',      # PENDING/DRAFT/APPROVED
+            'Discussion_Log': ''      # Chat history
+        }
+        
+        for col, default_value in required_cols.items():
             if col not in self.checklist_df.columns:
-                self.checklist_df[col] = ""
+                self.checklist_df[col] = default_value
         
         # Initialize Status to PENDING if empty
         if 'Status' in self.checklist_df.columns:
             self.checklist_df['Status'] = self.checklist_df['Status'].replace('', 'PENDING')
         
+        logger.success(f"Checklist loaded", f"{len(self.checklist_df)} rows")
         return self.checklist_df
     
     def get_question_from_row(self, row_index: int) -> str:
@@ -191,11 +203,44 @@ class ComplianceService:
                 state={"pdf_uri": self.pdf_uri}
             ))
 
+    def _parse_response(self, response_text: str) -> dict:
+        """
+        Parse structured response from agent.
+        Extracts: Risposta, Confidenza, Giustificazione
+        """
+        import re
+        
+        result = {
+            'risposta': '?',
+            'confidenza': '0%',
+            'giustificazione': response_text  # Fallback to full text
+        }
+        
+        # Extract RISPOSTA
+        risposta_match = re.search(r'\*\*RISPOSTA:\*\*\s*([^\n]+)', response_text, re.IGNORECASE)
+        if risposta_match:
+            result['risposta'] = risposta_match.group(1).strip()
+        
+        # Extract CONFIDENZA
+        conf_match = re.search(r'\*\*CONFIDENZA:\*\*\s*([0-9]+)%?', response_text, re.IGNORECASE)
+        if conf_match:
+            result['confidenza'] = f"{conf_match.group(1)}%"
+        
+        # Extract GIUSTIFICAZIONE (everything after the keyword)
+        giust_match = re.search(r'\*\*GIUSTIFICAZIONE:\*\*\s*(.+)', response_text, re.IGNORECASE | re.DOTALL)
+        if giust_match:
+            result['giustificazione'] = giust_match.group(1).strip()
+        
+        return result
+
     def analyze_row(self, row_index: int, question: str) -> str:
         """
         Runs the agent on a specific row.
         """
+        logger.info(f"Analyzing row {row_index}", question[:100])
+        
         if not self.pdf_uri:
+            logger.error("Analysis failed: No PDF loaded")
             return "Error: No PDF loaded."
 
         user_id = "user_default"
@@ -209,7 +254,7 @@ class ComplianceService:
         
         Checklist Question: {question}
         
-        Please analyze the document and determine compliance.
+        Please analyze the document and provide a structured response.
         """
         
         content = types.Content(role='user', parts=[types.Part(text=prompt)])
@@ -226,9 +271,16 @@ class ComplianceService:
             if event.is_final_response() and event.content:
                 final_response = event.content.parts[0].text
         
-        # Update DataFrame
-        self.checklist_df.at[row_index, 'AI_Proposal'] = final_response
+        # Parse structured response
+        parsed = self._parse_response(final_response)
+        
+        # Update DataFrame with structured fields
+        self.checklist_df.at[row_index, 'Risposta'] = parsed['risposta']
+        self.checklist_df.at[row_index, 'Confidenza'] = parsed['confidenza']
+        self.checklist_df.at[row_index, 'Giustificazione'] = parsed['giustificazione']
         self.checklist_df.at[row_index, 'Status'] = 'DRAFT'
+        
+        logger.success(f"Row {row_index} analyzed", f"Answer: {parsed['risposta']}, Confidence: {parsed['confidenza']}")
         
         return final_response
 
