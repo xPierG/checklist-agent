@@ -1,5 +1,6 @@
 import asyncio
 import os
+import time
 import pandas as pd
 from typing import Dict, Any, List
 from dotenv import load_dotenv
@@ -125,6 +126,11 @@ class ComplianceService:
                     "response": response,
                     "status": "success"
                 })
+                
+                # Add delay between items to avoid rate limiting
+                if idx < total_items - 1:  # Don't delay after last item
+                    time.sleep(2)
+                    
             except Exception as e:
                 results.append({
                     "index": idx,

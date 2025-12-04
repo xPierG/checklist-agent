@@ -71,7 +71,7 @@ if "checklist_df" in st.session_state:
         # Batch Mode
         st.header("📦 Batch Processing Mode")
         
-        st.info("This will analyze the first 3 PENDING items in your checklist.")
+        st.info("This will analyze the first 3 PENDING items in your checklist. Processing includes 2-second delays between items to respect API rate limits (~6 seconds total).")
         
         # Show preview
         pending_df = df[df['Status'] == 'PENDING'].head(3)
