@@ -26,116 +26,127 @@ if "selected_row" not in st.session_state:
 # Sidebar
 with st.sidebar:
     st.title("🔍 Compliance Agent")
+    
+    # Quick Stats at top
+    if service.checklist_df is not None or service.context_pdf_uris or service.target_pdf_uris:
+        col1, col2, col3 = st.columns(3)
+        col1.metric("📚", len(service.context_pdf_uris), label_visibility="collapsed")
+        col2.metric("📄", len(service.target_pdf_uris), label_visibility="collapsed")
+        if service.checklist_df is not None:
+            pending = len(service.checklist_df[service.checklist_df['Status'] == 'PENDING'])
+            col3.metric("⏳", pending, label_visibility="collapsed")
+        else:
+            col3.metric("📋", 0, label_visibility="collapsed")
+    
     st.markdown("---")
     
-    # Project Setup Section
-    st.subheader("📂 Project Setup")
+    # CONTEXT PDFs - Regulations/Policies
+    st.markdown("### 🏛️ Rules & Regulations")
+    st.caption("Upload policies, standards, regulations")
     
-    # RULES (Context Documents)
-    with st.expander("🏛️ Rules & Regulations", expanded=True):
-        st.caption("Upload regulations, policies, standards")
-        
-        uploaded_context_pdfs = st.file_uploader(
-            "Drop PDFs here",
-            type="pdf",
-            accept_multiple_files=True,
-            key="context_uploader",
-            label_visibility="collapsed"
-        )
-        
-        if uploaded_context_pdfs:
-            if st.button("📤 Process Rules", width="stretch", key="process_context"):
-                with st.spinner(f"Uploading {len(uploaded_context_pdfs)} PDF(s)..."):
-                    for uploaded_pdf in uploaded_context_pdfs:
-                        temp_path = f"temp_{uploaded_pdf.name}"
-                        with open(temp_path, "wb") as f:
-                            f.write(uploaded_pdf.getbuffer())
-                        service.load_context_pdf(temp_path)
-                        os.remove(temp_path)
-                    st.success(f"✅ {len(uploaded_context_pdfs)} rules loaded")
-        
-        # Show loaded files
-        if service.context_pdf_uris:
-            st.markdown("**Active:**")
-            for i, uri in enumerate(service.context_pdf_uris, 1):
-                filename = uri.split('/')[-1] if '/' in uri else uri
-                st.markdown(f"🟢 `{filename}`")
+    uploaded_context_pdfs = st.file_uploader(
+        "Drop PDFs",
+        type="pdf",
+        accept_multiple_files=True,
+        key="context_uploader",
+        label_visibility="collapsed"
+    )
     
-    # CONTENT (Target Documents)
-    with st.expander("📄 Content to Analyze", expanded=True):
-        st.caption("Documents to verify for compliance")
-        
-        uploaded_target_pdfs = st.file_uploader(
-            "Drop PDFs here",
-            type="pdf",
-            accept_multiple_files=True,
-            key="target_uploader",
-            label_visibility="collapsed"
-        )
-        
-        if uploaded_target_pdfs:
-            if st.button("📤 Process Content", width="stretch", key="process_target"):
-                with st.spinner(f"Uploading {len(uploaded_target_pdfs)} PDF(s)..."):
-                    for uploaded_pdf in uploaded_target_pdfs:
-                        temp_path = f"temp_{uploaded_pdf.name}"
-                        with open(temp_path, "wb") as f:
-                            f.write(uploaded_pdf.getbuffer())
-                        service.load_target_pdf(temp_path)
-                        os.remove(temp_path)
-                    st.success(f"✅ {len(uploaded_target_pdfs)} docs loaded")
-        
-        # Show loaded files
-        if service.target_pdf_uris:
-            st.markdown("**Active:**")
-            for i, uri in enumerate(service.target_pdf_uris, 1):
-                filename = uri.split('/')[-1] if '/' in uri else uri
-                st.markdown(f"🟢 `{filename}`")
+    if uploaded_context_pdfs:
+        if st.button("📤 Process Rules", width="stretch", key="process_context"):
+            with st.spinner(f"Processing {len(uploaded_context_pdfs)} file(s)..."):
+                for uploaded_pdf in uploaded_context_pdfs:
+                    temp_path = f"temp_{uploaded_pdf.name}"
+                    with open(temp_path, "wb") as f:
+                        f.write(uploaded_pdf.getbuffer())
+                    service.load_context_pdf(temp_path)
+                    os.remove(temp_path)
+                st.success(f"✅ {len(uploaded_context_pdfs)} rules loaded")
+    
+    # Compact file list
+    if service.context_pdf_uris:
+        st.caption(f"**Active:** {len(service.context_pdf_uris)} files")
+        for uri in service.context_pdf_uris[:3]:  # Show max 3
+            filename = uri.split('/')[-1][:20] if '/' in uri else uri[:20]
+            st.caption(f"🟢 {filename}")
+        if len(service.context_pdf_uris) > 3:
+            st.caption(f"... +{len(service.context_pdf_uris) - 3} more")
+    
+    st.markdown("---")
+    
+    # TARGET PDFs - Documents to Analyze
+    st.markdown("### 📄 Content to Analyze")
+    st.caption("Documents to verify for compliance")
+    
+    uploaded_target_pdfs = st.file_uploader(
+        "Drop PDFs",
+        type="pdf",
+        accept_multiple_files=True,
+        key="target_uploader",
+        label_visibility="collapsed"
+    )
+    
+    if uploaded_target_pdfs:
+        if st.button("📤 Process Content", width="stretch", key="process_target"):
+            with st.spinner(f"Processing {len(uploaded_target_pdfs)} file(s)..."):
+                for uploaded_pdf in uploaded_target_pdfs:
+                    temp_path = f"temp_{uploaded_pdf.name}"
+                    with open(temp_path, "wb") as f:
+                        f.write(uploaded_pdf.getbuffer())
+                    service.load_target_pdf(temp_path)
+                    os.remove(temp_path)
+                st.success(f"✅ {len(uploaded_target_pdfs)} docs loaded")
+    
+    # Compact file list
+    if service.target_pdf_uris:
+        st.caption(f"**Active:** {len(service.target_pdf_uris)} files")
+        for uri in service.target_pdf_uris[:3]:  # Show max 3
+            filename = uri.split('/')[-1][:20] if '/' in uri else uri[:20]
+            st.caption(f"🟢 {filename}")
+        if len(service.target_pdf_uris) > 3:
+            st.caption(f"... +{len(service.target_pdf_uris) - 3} more")
+    
+    st.markdown("---")
     
     # CHECKLIST
-    with st.expander("📋 Checklist", expanded=True):
-        st.caption("Excel/CSV with questions")
-        
-        uploaded_excel = st.file_uploader(
-            "Upload file",
-            type=["xlsx", "xls", "csv"],
-            key="checklist_uploader",
-            label_visibility="collapsed"
-        )
-        
-        if uploaded_excel:
-            if st.button("📊 Load Checklist", width="stretch"):
-                df = service.load_checklist(uploaded_excel)
-                st.session_state.checklist_df = df
-                
-                if service.question_column:
-                    st.success(f"✅ Loaded: {len(df)} items")
-                else:
-                    st.error("⚠️ Column detection failed")
-
-    st.markdown("---")
+    st.markdown("### 📋 Checklist")
+    st.caption("Excel/CSV with questions")
     
-    # Global Stats
-    st.subheader("📊 Project Stats")
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Rules", len(service.context_pdf_uris))
-    col2.metric("Docs", len(service.target_pdf_uris))
+    uploaded_excel = st.file_uploader(
+        "Upload file",
+        type=["xlsx", "xls", "csv"],
+        key="checklist_uploader",
+        label_visibility="collapsed"
+    )
+    
+    if uploaded_excel:
+        if st.button("📊 Load Checklist", width="stretch"):
+            df = service.load_checklist(uploaded_excel)
+            st.session_state.checklist_df = df
+            
+            if service.question_column:
+                st.success(f"✅ Loaded: {len(df)} items")
+            else:
+                st.error("⚠️ Column detection failed")
     
     if service.checklist_df is not None:
         pending = len(service.checklist_df[service.checklist_df['Status'] == 'PENDING'])
-        col3.metric("Pending", pending)
-    else:
-        col3.metric("Items", 0)
+        st.caption(f"**Active:** {len(service.checklist_df)} items ({pending} pending)")
+
+    st.markdown("---")
+    st.caption("💡 Click Status cells to change DRAFT → APPROVED")
     
-    # Activity Monitor (collapsed by default)
-    with st.expander("📊 Activity Log", expanded=False):
-        activities = logger.get_recent_activities(limit=5)
-        if activities:
-            for activity in activities:
-                emoji = {"INFO":"ℹ️", "SUCCESS":"✅", "WARNING":"⚠️", "ERROR":"❌"}.get(activity['level'], "•")
-                st.caption(f"{emoji} {activity['message']}")
-        
-        if st.button("Clear Log", width="stretch", key="clear_log"):
-            logger.clear_activities()
+    # Activity Log
+    st.markdown("---")
+    st.caption("**Activity Log**")
+    activities = logger.get_recent_activities(limit=5)
+    if activities:
+        for activity in activities:
+            emoji = {"INFO":"ℹ️", "SUCCESS":"✅", "WARNING":"⚠️", "ERROR":"❌"}.get(activity['level'], "•")
+            st.caption(f"{emoji} {activity['message']}")
+    
+    if st.button("Clear Log", width="stretch", key="clear_log"):
+        logger.clear_activities()
         st.rerun()
 
 # Main Area
