@@ -215,36 +215,36 @@ if "checklist_df" in st.session_state:
             col_b1, col_b2 = st.columns(2)
             with col_b1:
                 if st.button("▶️ Start Batch", width="stretch", disabled=len(rows_to_process)==0):
-                    # Create progress containers
-                    progress_bar = st.progress(0)
-                    status_text = st.empty()
-                    
-                    total = len(rows_to_process)
-                    for i, idx in enumerate(rows_to_process, 1):
-                        question = service.get_question_from_row(idx)
-                        question_preview = question[:60] + "..." if len(question) > 60 else question
+                    # Use st.status for better progress visualization
+                    with st.status("🚀 Starting batch analysis...", expanded=True) as status:
+                        progress_bar = st.progress(0)
+                        total = len(rows_to_process)
                         
-                        # Update status
-                        status_text.info(f"🔍 Analyzing row {idx} ({i}/{total}): {question_preview}")
+                        for i, idx in enumerate(rows_to_process, 1):
+                            question = service.get_question_from_row(idx)
+                            question_preview = question[:50] + "..." if len(question) > 50 else question
+                            
+                            # Update status label
+                            status.update(label=f"🔄 Analyzing row {idx}/{len(df)}: {question_preview}")
+                            st.write(f"**Row {idx}**: {question}")
+                            
+                            # Analyze
+                            service.analyze_row(idx, question)
+                            st.write("✅ Analysis complete")
+                            
+                            # Update progress
+                            progress_bar.progress(i / total)
+                            
+                            # Add delay to avoid rate limiting (except for last item)
+                            if i < total:
+                                st.write(f"⏳ Waiting 2s for rate limit...")
+                                time.sleep(2)
                         
-                        # Analyze
-                        service.analyze_row(idx, question)
-                        
-                        # Update progress
-                        progress_bar.progress(i / total)
-                        
-                        # Add delay to avoid rate limiting (except for last item)
-                        if i < total:
-                            status_text.warning(f"⏳ Rate limit delay (2s)... Next: row {rows_to_process[i]}")
-                            time.sleep(2)
-                    
-                    # Complete
-                    progress_bar.progress(1.0)
-                    status_text.success(f"✅ Completed! Analyzed {total} rows")
+                        status.update(label=f"✅ Batch Complete! Analyzed {total} rows", state="complete", expanded=False)
                     
                     st.session_state.checklist_df = service.get_dataframe()
                     st.session_state.show_batch_dialog = False
-                    time.sleep(1)  # Let user see completion message
+                    time.sleep(1)
                     st.rerun()
             
             with col_b2:
@@ -269,10 +269,16 @@ if "checklist_df" in st.session_state:
         if st.button("🔍 Analyze", width="stretch", type="secondary", key="analyze_individual"):
             logger.info(f"User requested analysis for row {row_to_analyze}")
             question = service.get_question_from_row(row_to_analyze)
-            with st.spinner("Analyzing..."):
+            
+            # Use st.status for single row too
+            with st.status(f"🔄 Analyzing Row {row_to_analyze}...", expanded=True) as status:
+                st.write(f"**Question**: {question}")
+                st.write("🤖 Agents are consulting documents...")
                 service.analyze_row(row_to_analyze, question)
-                st.session_state.checklist_df = service.get_dataframe()
-                st.rerun()
+                status.update(label="✅ Analysis Complete!", state="complete", expanded=False)
+            
+            st.session_state.checklist_df = service.get_dataframe()
+            st.rerun()
     
     st.markdown("---")
     
