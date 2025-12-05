@@ -28,6 +28,12 @@ with st.sidebar:
     st.title("🔍 Compliance Agent")
     st.markdown("---")
     
+    # Initialize session state for tracking processed files
+    if "processed_context_files" not in st.session_state:
+        st.session_state.processed_context_files = set()
+    if "processed_target_files" not in st.session_state:
+        st.session_state.processed_target_files = set()
+    
     # Unified Project Setup Tabs
     tab_rules, tab_content, tab_checklist = st.tabs(["🏛️ Rules", "📄 Content", "📋 Checklist"])
     
@@ -46,23 +52,31 @@ with st.sidebar:
         
         # Auto-process on upload
         if uploaded_context_pdfs:
-            # Check if any new file needs loading
-            new_files = [f for f in uploaded_context_pdfs if f.name not in [os.path.basename(u) for u in service.context_pdf_uris]]
+            # Check if any new file needs loading by checking our session state cache
+            new_files = [f for f in uploaded_context_pdfs if f.name not in st.session_state.processed_context_files]
+            
             if new_files:
                 with st.spinner(f"Processing {len(new_files)} new files..."):
                     for uploaded_pdf in new_files:
-                        temp_path = f"temp_{uploaded_pdf.name}"
-                        with open(temp_path, "wb") as f:
-                            f.write(uploaded_pdf.getbuffer())
-                        service.load_context_pdf(temp_path)
-                        os.remove(temp_path)
+                        try:
+                            temp_path = f"temp_{uploaded_pdf.name}"
+                            with open(temp_path, "wb") as f:
+                                f.write(uploaded_pdf.getbuffer())
+                            service.load_context_pdf(temp_path)
+                            st.session_state.processed_context_files.add(uploaded_pdf.name)
+                            if os.path.exists(temp_path):
+                                os.remove(temp_path)
+                        except Exception as e:
+                            logger.error(f"Failed to process {uploaded_pdf.name}: {e}")
+                            st.error(f"Error processing {uploaded_pdf.name}")
+                    
                     st.toast(f"✅ Loaded {len(new_files)} context documents")
         
         # Active Files List with Status Badges
-        if service.context_pdf_uris:
+        if st.session_state.processed_context_files:
             st.markdown("**Active Rules:**")
-            for uri in service.context_pdf_uris:
-                st.markdown(f"🟢 `{os.path.basename(uri)}`")
+            for fname in st.session_state.processed_context_files:
+                st.markdown(f"🟢 `{fname}`")
         else:
             st.info("No rules loaded")
 
@@ -82,22 +96,30 @@ with st.sidebar:
         # Auto-process on upload
         if uploaded_target_pdfs:
             # Check if any new file needs loading
-            new_files = [f for f in uploaded_target_pdfs if f.name not in [os.path.basename(u) for u in service.target_pdf_uris]]
+            new_files = [f for f in uploaded_target_pdfs if f.name not in st.session_state.processed_target_files]
+            
             if new_files:
                 with st.spinner(f"Processing {len(new_files)} new files..."):
                     for uploaded_pdf in new_files:
-                        temp_path = f"temp_{uploaded_pdf.name}"
-                        with open(temp_path, "wb") as f:
-                            f.write(uploaded_pdf.getbuffer())
-                        service.load_target_pdf(temp_path)
-                        os.remove(temp_path)
+                        try:
+                            temp_path = f"temp_{uploaded_pdf.name}"
+                            with open(temp_path, "wb") as f:
+                                f.write(uploaded_pdf.getbuffer())
+                            service.load_target_pdf(temp_path)
+                            st.session_state.processed_target_files.add(uploaded_pdf.name)
+                            if os.path.exists(temp_path):
+                                os.remove(temp_path)
+                        except Exception as e:
+                            logger.error(f"Failed to process {uploaded_pdf.name}: {e}")
+                            st.error(f"Error processing {uploaded_pdf.name}")
+                    
                     st.toast(f"✅ Loaded {len(new_files)} target documents")
 
         # Active Files List with Status Badges
-        if service.target_pdf_uris:
+        if st.session_state.processed_target_files:
             st.markdown("**Active Content:**")
-            for uri in service.target_pdf_uris:
-                st.markdown(f"🟢 `{os.path.basename(uri)}`")
+            for fname in st.session_state.processed_target_files:
+                st.markdown(f"🟢 `{fname}`")
         else:
             st.info("No content loaded")
 
