@@ -153,6 +153,29 @@ with st.sidebar:
 if "checklist_df" in st.session_state:
     df = st.session_state.checklist_df
     
+    # Progress Bar - UX Feature #2
+    total_items = len(df)
+    pending = len(df[df['Status'] == 'PENDING'])
+    draft = len(df[df['Status'] == 'DRAFT'])
+    approved = len(df[df['Status'] == 'APPROVED'])
+    rejected = len(df[df['Status'] == 'REJECTED'])
+    
+    completed = approved + rejected
+    completion_rate = (completed / total_items * 100) if total_items > 0 else 0
+    
+    st.markdown("### 📊 Progress")
+    st.progress(completion_rate / 100)
+    
+    col_p1, col_p2, col_p3, col_p4, col_p5 = st.columns(5)
+    col_p1.metric("Total", total_items)
+    col_p2.metric("⏳ Pending", pending, delta=None, delta_color="off")
+    col_p3.metric("📝 Draft", draft, delta=None, delta_color="off")
+    col_p4.metric("✅ Approved", approved, delta=None, delta_color="normal")
+    col_p5.metric("❌ Rejected", rejected, delta=None, delta_color="inverse")
+    
+    st.caption(f"**Completion:** {completion_rate:.1f}% ({completed}/{total_items} items)")
+    st.markdown("---")
+    
     # Action buttons above checklist
     st.markdown("### 🎯 Actions")
     
@@ -294,75 +317,74 @@ if "checklist_df" in st.session_state:
     col_checklist, col_chat = st.columns([7, 3])
     
     with col_checklist:
-        st.subheader("📋 Checklist")
+        # Display Checklist Table
+        st.markdown("### 📋 Checklist")
         
-        # Reorder columns: Original first, then AI columns
-        all_cols = df.columns.tolist()
-        ai_columns = ['Risposta', 'Confidenza', 'Giustificazione', 'Status', 'Discussion_Log']
-        
-        # Get original columns (not AI-generated)
-        original_cols = [col for col in all_cols if col not in ai_columns]
-        
-        # Reorder: original columns, then AI columns
-        ordered_cols = original_cols + [col for col in ai_columns if col in all_cols]
-        df_display = df[ordered_cols]
-        
-        # Column configuration with styling
-        column_config = {}
-        
-        # Original columns - no special config (will appear normal)
-        for col in original_cols:
-            if col == service.question_column:
-                column_config[col] = st.column_config.TextColumn(
-                    col,
-                    width="large",
-                    help="Domanda della checklist"
-                )
-        
-        # AI columns with emoji and styling
-        if 'Risposta' in all_cols:
-            column_config['Risposta'] = st.column_config.TextColumn(
-                "🤖 Risposta",
-                help="Risposta generata dall'AI",
-                width="medium"
-            )
-        
-        if 'Confidenza' in all_cols:
-            column_config['Confidenza'] = st.column_config.TextColumn(
-                "🤖 Confidenza",
-                help="Livello di confidenza (0-100%)",
-                width="small"
-            )
-        
-        if 'Giustificazione' in all_cols:
-            column_config['Giustificazione'] = st.column_config.TextColumn(
-                "🤖 Giustificazione",
-                help="Snippet di testo e spiegazione",
-                width="large"
-            )
-        
-        if 'Status' in all_cols:
-            column_config['Status'] = st.column_config.SelectboxColumn(
-                "📊 Status",
-                help="Stato dell'analisi - Click to change",
-                width="small",
-                options=['PENDING', 'DRAFT', 'APPROVED', 'REJECTED']
-            )
-        
-        # Display editable dataframe
-        edited_df = st.data_editor(
-            df_display,
-            column_config=column_config,
-            hide_index=False,
-            width="stretch",
-            height=500,
-            key="checklist_editor"
+        # UX Feature #4: Filter in main panel
+        filter_selection = st.radio(
+            "Show:",
+            ["All", "Pending Only", "Draft Only", "Approved", "Rejected"],
+            horizontal=True,
+            key="status_filter"
         )
         
-        # Update service dataframe if edited
-        if not edited_df.equals(df_display):
-            service.checklist_df = edited_df
-            st.session_state.checklist_df = edited_df
+        # Apply Filter
+        display_df = df.copy()
+        
+        if filter_selection == "Pending Only":
+            display_df = display_df[display_df['Status'] == 'PENDING']
+        elif filter_selection == "Draft Only":
+            display_df = display_df[display_df['Status'] == 'DRAFT']
+        elif filter_selection == "Approved":
+            display_df = display_df[display_df['Status'] == 'APPROVED']
+        elif filter_selection == "Rejected":
+            display_df = display_df[display_df['Status'] == 'REJECTED']
+        
+        if len(display_df) == 0:
+            st.info(f"No items match filter: {filter_selection}")
+        else:
+            st.caption(f"Showing {len(display_df)} of {len(df)} items")
+            
+            # UX Feature #1: Color-Coded Status Column + #5 Rich justification
+            edited_df = st.data_editor(
+                display_df,
+                width="stretch",
+                num_rows="fixed",
+                hide_index=False,
+                column_config={
+                    "Status": st.column_config.SelectboxColumn(
+                        "Status",
+                        options=["PENDING", "DRAFT", "APPROVED", "REJECTED"],
+                        required=True,
+                        help="Click to change status"
+                    ),
+                    "Confidenza": st.column_config.ProgressColumn(
+                        "Confidence",
+                        min_value=0,
+                        max_value=100,
+                        format="%d%%"
+                    ),
+                    "Risposta": st.column_config.TextColumn(
+                        "Answer",
+                        width="medium"
+                    ),
+                    "Giustificazione": st.column_config.TextColumn(
+                        "Justification",
+                        width="large"
+                    )
+                },
+                height=500,
+                key="checklist_editor"
+            )
+            
+            # Update the original dataframe with edits
+            if edited_df is not None:
+                # Map edited rows back to original df
+                for idx in edited_df.index:
+                    if idx in df.index:
+                        df.loc[idx] = edited_df.loc[idx]
+                st.session_state.checklist_df = df
+                service.checklist_df = df
     
     with col_chat:
         st.subheader("💬 Ask Questions")
