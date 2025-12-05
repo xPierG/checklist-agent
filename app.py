@@ -28,141 +28,106 @@ with st.sidebar:
     st.title("🔍 Compliance Agent")
     st.markdown("---")
     
-    # Initialize session state for tracking processed files
-    if "processed_context_files" not in st.session_state:
-        st.session_state.processed_context_files = set()
-    if "processed_target_files" not in st.session_state:
-        st.session_state.processed_target_files = set()
+    # Project Setup Section
+    st.subheader("📂 Project Setup")
     
-    # Unified Project Setup Tabs
-    tab_rules, tab_content, tab_checklist = st.tabs(["🏛️ Rules", "📄 Content", "📋 Checklist"])
-    
-    # Tab 1: RULES (Context)
-    with tab_rules:
-        st.markdown("### Context Documents")
-        st.caption("Regulations, policies, standards")
+    # RULES (Context Documents)
+    with st.expander("🏛️ Rules & Regulations", expanded=True):
+        st.caption("Upload regulations, policies, standards")
         
         uploaded_context_pdfs = st.file_uploader(
-            "Drop regulations here",
+            "Drop PDFs here",
             type="pdf",
             accept_multiple_files=True,
             key="context_uploader",
             label_visibility="collapsed"
         )
         
-        # Auto-process on upload
         if uploaded_context_pdfs:
-            # Check if any new file needs loading by checking our session state cache
-            new_files = [f for f in uploaded_context_pdfs if f.name not in st.session_state.processed_context_files]
-            
-            if new_files:
-                with st.spinner(f"Processing {len(new_files)} new files..."):
-                    for uploaded_pdf in new_files:
-                        try:
-                            temp_path = f"temp_{uploaded_pdf.name}"
-                            with open(temp_path, "wb") as f:
-                                f.write(uploaded_pdf.getbuffer())
-                            service.load_context_pdf(temp_path)
-                            st.session_state.processed_context_files.add(uploaded_pdf.name)
-                            if os.path.exists(temp_path):
-                                os.remove(temp_path)
-                        except Exception as e:
-                            logger.error(f"Failed to process {uploaded_pdf.name}: {e}")
-                            st.error(f"Error processing {uploaded_pdf.name}")
-                    
-                    st.toast(f"✅ Loaded {len(new_files)} context documents")
+            if st.button("📤 Process Rules", width="stretch", key="process_context"):
+                with st.spinner(f"Uploading {len(uploaded_context_pdfs)} PDF(s)..."):
+                    for uploaded_pdf in uploaded_context_pdfs:
+                        temp_path = f"temp_{uploaded_pdf.name}"
+                        with open(temp_path, "wb") as f:
+                            f.write(uploaded_pdf.getbuffer())
+                        service.load_context_pdf(temp_path)
+                        os.remove(temp_path)
+                    st.success(f"✅ {len(uploaded_context_pdfs)} rules loaded")
         
-        # Active Files List with Status Badges
-        if st.session_state.processed_context_files:
-            st.markdown("**Active Rules:**")
-            for fname in st.session_state.processed_context_files:
-                st.markdown(f"🟢 `{fname}`")
-        else:
-            st.info("No rules loaded")
-
-    # Tab 2: CONTENT (Target)
-    with tab_content:
-        st.markdown("### Target Documents")
-        st.caption("Documents to verify")
+        # Show loaded files
+        if service.context_pdf_uris:
+            st.markdown("**Active:**")
+            for i, uri in enumerate(service.context_pdf_uris, 1):
+                filename = uri.split('/')[-1] if '/' in uri else uri
+                st.markdown(f"🟢 `{filename}`")
+    
+    # CONTENT (Target Documents)
+    with st.expander("📄 Content to Analyze", expanded=True):
+        st.caption("Documents to verify for compliance")
         
         uploaded_target_pdfs = st.file_uploader(
-            "Drop documents to analyze here",
+            "Drop PDFs here",
             type="pdf",
             accept_multiple_files=True,
             key="target_uploader",
             label_visibility="collapsed"
         )
         
-        # Auto-process on upload
         if uploaded_target_pdfs:
-            # Check if any new file needs loading
-            new_files = [f for f in uploaded_target_pdfs if f.name not in st.session_state.processed_target_files]
-            
-            if new_files:
-                with st.spinner(f"Processing {len(new_files)} new files..."):
-                    for uploaded_pdf in new_files:
-                        try:
-                            temp_path = f"temp_{uploaded_pdf.name}"
-                            with open(temp_path, "wb") as f:
-                                f.write(uploaded_pdf.getbuffer())
-                            service.load_target_pdf(temp_path)
-                            st.session_state.processed_target_files.add(uploaded_pdf.name)
-                            if os.path.exists(temp_path):
-                                os.remove(temp_path)
-                        except Exception as e:
-                            logger.error(f"Failed to process {uploaded_pdf.name}: {e}")
-                            st.error(f"Error processing {uploaded_pdf.name}")
-                    
-                    st.toast(f"✅ Loaded {len(new_files)} target documents")
-
-        # Active Files List with Status Badges
-        if st.session_state.processed_target_files:
-            st.markdown("**Active Content:**")
-            for fname in st.session_state.processed_target_files:
-                st.markdown(f"🟢 `{fname}`")
-        else:
-            st.info("No content loaded")
-
-    # Tab 3: CHECKLIST
-    with tab_checklist:
-        st.markdown("### Checklist")
+            if st.button("📤 Process Content", width="stretch", key="process_target"):
+                with st.spinner(f"Uploading {len(uploaded_target_pdfs)} PDF(s)..."):
+                    for uploaded_pdf in uploaded_target_pdfs:
+                        temp_path = f"temp_{uploaded_pdf.name}"
+                        with open(temp_path, "wb") as f:
+                            f.write(uploaded_pdf.getbuffer())
+                        service.load_target_pdf(temp_path)
+                        os.remove(temp_path)
+                    st.success(f"✅ {len(uploaded_target_pdfs)} docs loaded")
+        
+        # Show loaded files
+        if service.target_pdf_uris:
+            st.markdown("**Active:**")
+            for i, uri in enumerate(service.target_pdf_uris, 1):
+                filename = uri.split('/')[-1] if '/' in uri else uri
+                st.markdown(f"🟢 `{filename}`")
+    
+    # CHECKLIST
+    with st.expander("📋 Checklist", expanded=True):
         st.caption("Excel/CSV with questions")
         
         uploaded_excel = st.file_uploader(
-            "Upload checklist", 
+            "Upload file",
             type=["xlsx", "xls", "csv"],
             key="checklist_uploader",
             label_visibility="collapsed"
         )
         
         if uploaded_excel:
-            # Auto-load if dataframe is empty or new file
-            if "checklist_filename" not in st.session_state or st.session_state.checklist_filename != uploaded_excel.name:
+            if st.button("📊 Load Checklist", width="stretch"):
                 df = service.load_checklist(uploaded_excel)
                 st.session_state.checklist_df = df
-                st.session_state.checklist_filename = uploaded_excel.name
-                st.toast("✅ Checklist loaded")
-            
-            if service.checklist_df is not None:
-                pending = len(service.checklist_df[service.checklist_df['Status'] == 'PENDING'])
-                st.success(f"✅ Loaded: `{uploaded_excel.name}`")
-                st.metric("Pending Items", pending)
                 
-                # Column check
-                if not service.question_column:
+                if service.question_column:
+                    st.success(f"✅ Loaded: {len(df)} items")
+                else:
                     st.error("⚠️ Column detection failed")
-                    st.caption("Check CHECKLIST_FORMAT.md")
 
     st.markdown("---")
     
-    # Global Stats Area
+    # Global Stats
+    st.subheader("📊 Project Stats")
     col1, col2, col3 = st.columns(3)
     col1.metric("Rules", len(service.context_pdf_uris))
     col2.metric("Docs", len(service.target_pdf_uris))
-    col3.metric("Q's", len(service.checklist_df) if service.checklist_df is not None else 0)
-
-    # Activity Log (Moved to bottom)
-    with st.expander("📊 System Log", expanded=False):
+    
+    if service.checklist_df is not None:
+        pending = len(service.checklist_df[service.checklist_df['Status'] == 'PENDING'])
+        col3.metric("Pending", pending)
+    else:
+        col3.metric("Items", 0)
+    
+    # Activity Monitor (collapsed by default)
+    with st.expander("📊 Activity Log", expanded=False):
         activities = logger.get_recent_activities(limit=5)
         if activities:
             for activity in activities:
@@ -171,7 +136,6 @@ with st.sidebar:
         
         if st.button("Clear Log", width="stretch", key="clear_log"):
             logger.clear_activities()
-            st.rerun()
         st.rerun()
 
 # Main Area
