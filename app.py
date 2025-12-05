@@ -135,19 +135,6 @@ with st.sidebar:
 
     st.markdown("---")
     st.caption("💡 Click Status cells to change DRAFT → APPROVED")
-    
-    # Activity Log
-    st.markdown("---")
-    st.caption("**Activity Log**")
-    activities = logger.get_recent_activities(limit=5)
-    if activities:
-        for activity in activities:
-            emoji = {"INFO":"ℹ️", "SUCCESS":"✅", "WARNING":"⚠️", "ERROR":"❌"}.get(activity['level'], "•")
-            st.caption(f"{emoji} {activity['message']}")
-    
-    if st.button("Clear Log", width="stretch", key="clear_log"):
-        logger.clear_activities()
-        st.rerun()
 
 # Main Area
 if "checklist_df" in st.session_state:
