@@ -10,9 +10,10 @@ st.set_page_config(layout="wide", page_title="ADK Compliance Agent")
 
 # Initialize Service in Session State
 if "service" not in st.session_state:
+    auth_mode = os.environ.get("AUTH_MODE", "ADC") # Read AUTH_MODE, default to ADC
     try:
-        st.session_state.service = ComplianceService()
-        st.success("✅ Compliance Service Initialized")
+        st.session_state.service = ComplianceService(auth_mode=auth_mode) # Pass auth_mode
+        st.success(f"✅ Compliance Service Initialized (Auth Mode: {auth_mode})")
     except Exception as e:
         st.error(f"Failed to initialize service: {e}")
         st.stop()

@@ -21,14 +21,18 @@ class ComplianceService:
     Facade for the Compliance Agent system.
     Handles session management, file loading, and agent execution.
     """
-    def __init__(self):
-        logger.info("Initializing ComplianceService")
-        api_key = os.environ.get("GOOGLE_API_KEY")
-        if not api_key:
-            logger.error("GOOGLE_API_KEY not found in environment")
-            raise ValueError("GOOGLE_API_KEY environment variable not set")
-        
-        self.client = Client(api_key=api_key)
+    def __init__(self, auth_mode: str = "API_KEY"):
+        logger.info(f"Initializing ComplianceService with Auth Mode: {auth_mode}")
+        if auth_mode == "API_KEY":
+            api_key = os.environ.get("GOOGLE_API_KEY")
+            if not api_key:
+                logger.error("GOOGLE_API_KEY not found in environment")
+                raise ValueError("GOOGLE_API_KEY environment variable not set")
+            self.client = Client(api_key=api_key)
+        elif auth_mode == "ADC":
+            self.client = Client() # ADC will handle authentication
+        else:
+            raise ValueError(f"Unsupported authentication mode: {auth_mode}")
         self.pdf_loader = PDFLoader(self.client)
         
         # ADK Setup

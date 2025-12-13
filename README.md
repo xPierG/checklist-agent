@@ -73,6 +73,24 @@ pip install -r requirements.txt
 # Set up environment variables
 cp .env.example .env
 # Edit .env and add your GOOGLE_API_KEY
+
+### Authentication Mode
+
+The application supports two authentication modes:
+
+-   **`API_KEY` (Default)**: Uses a Google API Key set in the `GOOGLE_API_KEY` environment variable. This is suitable for local development.
+-   **`ADC` (Application Default Credentials)**: Uses Google Cloud's Application Default Credentials. This is the recommended method for deploying to Google Cloud environments like Cloud Run, as it leverages the service account attached to the environment.
+
+To set the authentication mode, set the `AUTH_MODE` environment variable:
+
+```bash
+# For API Key authentication (default)
+export AUTH_MODE=API_KEY
+# Or simply omit it, as API_KEY is the default behavior if GOOGLE_API_KEY is present
+
+# For Application Default Credentials
+export AUTH_MODE=ADC
+```
 ```
 
 ## Usage
