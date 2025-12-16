@@ -1,0 +1,10 @@
+# Ignora l'ambiente virtuale Python (RAG killer)
+.venv/**
+.venv/
+
+# Ignora altre cartelle pesanti o inutili per l'AI
+node_modules/**
+__pycache__/**
+*.lock
+dist/**
+build/**

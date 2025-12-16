@@ -1,6 +1,6 @@
 from google.adk.agents import LlmAgent
 
-def create_librarian_agent(model_name: str = "gemini-2.5-flash-lite") -> LlmAgent:
+def create_librarian_agent(model_name: str = "gemini-2.5-pro") -> LlmAgent:
     """
     Creates the Librarian agent.
     

@@ -274,7 +274,7 @@ if "checklist_df" in st.session_state:
     # Row 2: Individual row analysis
     st.markdown("**🔍 Analyze Individual Row**")
     col_row1, col_row2 = st.columns([3, 1])
-    
+
     with col_row1:
         row_to_analyze = st.selectbox(
             "Select row:",
@@ -282,28 +282,46 @@ if "checklist_df" in st.session_state:
             format_func=lambda x: f"Row {x}: {service.get_question_from_row(x)[:50]}...",
             key="individual_row_selector"
         )
-    
+
     with col_row2:
         st.markdown("<br>", unsafe_allow_html=True)  # Spacing
-        if st.button("🔍 Analyze", width="stretch", type="secondary", key="analyze_individual"):
+        if st.button("🔍 Analyze", type="secondary", key="analyze_individual"):
             logger.info(f"User requested analysis for row {row_to_analyze}")
             question = service.get_question_from_row(row_to_analyze)
-            
+
             # Use st.status for single row too
             with st.status(f"🔄 Analyzing Row {row_to_analyze}...", expanded=True) as status:
                 st.write(f"**Question**: {question}")
                 st.write("🤖 Agents are consulting documents...")
                 service.analyze_row(row_to_analyze, question)
                 status.update(label="✅ Analysis Complete!", state="complete", expanded=False)
-            
+
             st.session_state.checklist_df = service.get_dataframe()
+
+            # Store the result for display
+            st.session_state.last_analyzed_row = row_to_analyze
+            st.session_state.last_analysis_result = {
+                'Risposta': st.session_state.checklist_df.at[row_to_analyze, 'Risposta'],
+                'Giustificazione': st.session_state.checklist_df.at[row_to_analyze, 'Giustificazione']
+            }
             st.rerun()
+
+    # Display the last analysis result under the selectbox
+    if "last_analysis_result" in st.session_state and "last_analyzed_row" in st.session_state and st.session_state.last_analyzed_row == row_to_analyze:
+        with col_row1:
+            st.markdown("---")
+            st.markdown(f"### 📝 Analysis for Row {st.session_state.last_analyzed_row}")
+            st.info(f"**Answer:** {st.session_state.last_analysis_result['Risposta']}")
+            st.markdown("**Justification:**")
+            st.markdown(st.session_state.last_analysis_result['Giustificazione'])
+
+
     
     st.markdown("---")
     
-    # Main 2-column layout
-    col_checklist, col_chat = st.columns([7, 3])
-    
+    # Main 2-column layout (for checklist only)
+    col_checklist, _ = st.columns([7, 3]) # Adjust column ratio or remove col_chat
+
     with col_checklist:
         # Display Checklist Table
         st.markdown("### 📋 Checklist")
@@ -373,49 +391,51 @@ if "checklist_df" in st.session_state:
                         df.loc[idx] = edited_df.loc[idx]
                 st.session_state.checklist_df = df
                 service.checklist_df = df
+
+    st.markdown("---") # New separator
+
+    # Ask Questions section - now full width and below
+    st.subheader("💬 Ask Questions")
     
-    with col_chat:
-        st.subheader("💬 Ask Questions")
+    # Row selector for chat (can be same as individual_row_selector or new)
+    chat_row = st.selectbox(
+        "About row:",
+        df.index.tolist(),
+        format_func=lambda x: f"Row {x}",
+        key="chat_row_selector_new" # Changed key to avoid conflict
+    )
+    
+    st.caption(f"**Question:** {service.get_question_from_row(chat_row)[:100]}...")
+    st.caption("💡 Ask about: the checklist question, what context docs say, what target docs contain")
+    
+    # Chat History Key per row
+    chat_key = f"chat_history_{chat_row}"
+    if chat_key not in st.session_state:
+        st.session_state[chat_key] = []
+    
+    # Chat container with fixed height
+    chat_container = st.container(height=350)
+    
+    with chat_container:
+        # Display History
+        for msg in st.session_state[chat_key]:
+            with st.chat_message(msg["role"]):
+                st.write(msg["content"])
+    
+    # Chat Input (always visible at bottom)
+    if prompt := st.chat_input("Ask about this item..."):
+        logger.info(f"User chat for row {chat_row}", prompt[:100])
         
-        # Row selector for chat
-        chat_row = st.selectbox(
-            "About row:",
-            df.index.tolist(),
-            format_func=lambda x: f"Row {x}",
-            key="chat_row_selector"
-        )
+        # Add user message
+        st.session_state[chat_key].append({"role": "user", "content": prompt})
         
-        st.caption(f"**Question:** {service.get_question_from_row(chat_row)[:100]}...")
-        st.caption("💡 Ask about: the checklist question, what context docs say, what target docs contain")
+        # Get Agent Response
+        with st.spinner("Thinking..."):
+            response = service.chat_with_row(chat_row, prompt)
         
-        # Chat History Key per row
-        chat_key = f"chat_history_{chat_row}"
-        if chat_key not in st.session_state:
-            st.session_state[chat_key] = []
-        
-        # Chat container with fixed height
-        chat_container = st.container(height=350)
-        
-        with chat_container:
-            # Display History
-            for msg in st.session_state[chat_key]:
-                with st.chat_message(msg["role"]):
-                    st.write(msg["content"])
-        
-        # Chat Input (always visible at bottom)
-        if prompt := st.chat_input("Ask about this item..."):
-            logger.info(f"User chat for row {chat_row}", prompt[:100])
-            
-            # Add user message
-            st.session_state[chat_key].append({"role": "user", "content": prompt})
-            
-            # Get Agent Response
-            with st.spinner("Thinking..."):
-                response = service.chat_with_row(chat_row, prompt)
-            
-            # Add agent message
-            st.session_state[chat_key].append({"role": "assistant", "content": response})
-            st.rerun()
+        # Add agent message
+        st.session_state[chat_key].append({"role": "assistant", "content": response})
+        st.rerun()
 
 else:
     st.info("👈 Please upload a checklist to begin.")
