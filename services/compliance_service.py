@@ -323,15 +323,22 @@ Be conversational and helpful. If you need to search the documents, do so and pr
         content = types.Content(role='user', parts=[types.Part(text=chat_prompt)])
         
         try:
-            response = asyncio.run(
-                self.orchestrator.send_message(
-                    user_id=user_id,
-                    session_id=session_id,
-                    content=content
-                )
+            # Use runner.run instead of orchestrator.send_message
+            events = self.runner.run(
+                user_id=user_id,
+                session_id=session_id,
+                new_message=content
             )
             
-            response_text = response.parts[0].text if response.parts else "No response"
+            response_text = ""
+            for event in events:
+                if event.is_final_response() and event.content:
+                    response_text = event.content.parts[0].text
+                    break
+            
+            if not response_text:
+                response_text = "No response received"
+                
             logger.success(f"Chat response for row {row_index}", response_text[:100])
             return response_text
             
