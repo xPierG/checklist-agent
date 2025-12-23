@@ -301,12 +301,19 @@ def mostra_interfaccia_principale():
             st.session_state.show_batch_dialog = True
 
         if col_btn2.button("💾 Export Results", width="stretch"):
-
-            output_file = "checklist_results.xlsx"
-
-            df.to_excel(output_file, index=False)
-
-            st.success(f"Exported to {output_file}")
+            # Convert dataframe to Excel in memory
+            import io
+            buffer = io.BytesIO()
+            df.to_excel(buffer, index=False, engine='openpyxl')
+            buffer.seek(0)
+            
+            st.download_button(
+                label="📥 Download Excel",
+                data=buffer,
+                file_name="checklist_results.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
 
         if col_btn3.button("🔄 Refresh", width="stretch"):
 
@@ -522,7 +529,7 @@ def mostra_interfaccia_principale():
 
 
 
-            format_func=lambda x: f"Row {x}: {service.get_question_from_row(x)[:50]}...",
+            format_func=lambda x: f"Row {x+1}: {service.get_question_from_row(x)[:50]}...",
 
 
 
@@ -658,27 +665,80 @@ def mostra_interfaccia_principale():
 
 
 
-            st.data_editor(display_df, width="stretch", num_rows="fixed", hide_index=False, column_config={
+            # Detect available columns
+            id_c = service.id_column
+            q_c = service.question_column
+            d_c = service.description_column
+            
+            # Prepare ordered columns
+            cols_to_show = []
+            col_config = {}
+            
+            # Add Row Number (based on index + 1)
+            display_df['#'] = display_df.index + 1
+            cols_to_show.append('#')
+            col_config['#'] = st.column_config.NumberColumn("#", width="small", format="%d")
+            
+            # Status (First)
+            cols_to_show.append('Status')
+            col_config['Status'] = st.column_config.SelectboxColumn(
+                "Status", 
+                options=["PENDING", "DRAFT", "APPROVED", "REJECTED"], 
+                required=True,
+                width="small"
+            )
+            
+            # ID (if exists)
+            if id_c and id_c in display_df.columns:
+                cols_to_show.append(id_c)
+                col_config[id_c] = st.column_config.TextColumn("ID", width="small")
+            
+            # Question
+            if q_c and q_c in display_df.columns:
+                cols_to_show.append(q_c)
+                col_config[q_c] = st.column_config.TextColumn("Domanda", width="medium")
+                
+            # Description
+            if d_c and d_c in display_df.columns:
+                cols_to_show.append(d_c)
+                col_config[d_c] = st.column_config.TextColumn("Descrizione", width="medium", help="Dettagli aggiuntivi")
+            
+            # AI Columns
+            cols_to_show.extend(['Risposta', 'Confidenza', 'Giustificazione'])
+            
+            col_config.update({
+                "Risposta": st.column_config.TextColumn("Risposta AI", width="medium"),
+                "Confidenza": st.column_config.ProgressColumn(
+                    "Confidenza Risposta", 
+                    min_value=0, 
+                    max_value=100, 
+                    format="%d%%",
+                    width="small"
+                ),
+                "Giustificazione": st.column_config.TextColumn("Spiegazione", width="large")
+            })
+            
+            # Filter DataFrame to show only these columns
+            editor_df = display_df[cols_to_show].copy()
 
-
-
-                "Status": st.column_config.SelectboxColumn("Status", options=["PENDING", "DRAFT", "APPROVED", "REJECTED"], required=True),
-
-
-
-                "Confidenza": st.column_config.ProgressColumn("Confidence", min_value=0, max_value=100, format="%d%%"),
-
-
-
-                "Risposta": st.column_config.TextColumn("Answer", width="medium"),
-
-
-
-                "Giustificazione": st.column_config.TextColumn("Justification", width="large")
-
-
-
-            }, height=500, key="checklist_editor")
+            edited_df = st.data_editor(
+                editor_df, 
+                width="stretch", 
+                num_rows="fixed", 
+                hide_index=True, 
+                column_config=col_config, 
+                height=500, 
+                key="checklist_editor",
+                disabled=[c for c in cols_to_show if c != 'Status'] # Only allow editing Status
+            )
+            
+            # Sync Status changes back to session state
+            if edited_df is not None:
+                for idx, row in edited_df.iterrows():
+                    # Map back using original index (preserved in display_df, but editor_df was copied)
+                    # wait, creating 'editor_df' preserves index.
+                    if idx in st.session_state.checklist_df.index:
+                        st.session_state.checklist_df.at[idx, 'Status'] = row['Status']
 
         
 
@@ -692,7 +752,7 @@ def mostra_interfaccia_principale():
 
 
 
-        chat_row = st.selectbox("About row:", df.index.tolist(), format_func=lambda x: f"Row {x}", key="chat_row_selector_new")
+        chat_row = st.selectbox("About row:", df.index.tolist(), format_func=lambda x: f"Row {x+1}", key="chat_row_selector_new")
 
 
 

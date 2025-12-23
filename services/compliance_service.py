@@ -121,20 +121,47 @@ class ComplianceService:
         question_patterns = ['question', 'requirement', 'item', 'description', 'check', 'domanda']
         question_col = None
         for col in self.checklist_df.columns:
-            if col.lower().strip() in question_patterns:
-                question_col = col
-                break
+            if col.lower().strip() in question_patterns and col.lower().strip() != 'description': # Avoid confusing description with question if both exist
+                 question_col = col
+                 break
         
+        # Fallback if we skipped 'description' incorrectly or if it's the only one
+        if not question_col:
+             for col in self.checklist_df.columns:
+                if col.lower().strip() in question_patterns:
+                    question_col = col
+                    break
+        
+        # Detect Description/Details column
+        desc_patterns = ['description', 'descrizione', 'details', 'dettagli', 'note', 'context']
+        desc_col = None
+        for col in self.checklist_df.columns:
+            if col != question_col and col.lower().strip() in desc_patterns: # Ensure it's not the question column
+                desc_col = col
+                break
+
         # Store column mappings
         self.id_column = id_col
         self.question_column = question_col
+        self.description_column = desc_col
         
-        logger.info(f"Detected columns", f"ID: {id_col}, Question: {question_col}")
+        logger.info(f"Detected columns", f"ID: {id_col}, Question: {question_col}, Description: {desc_col}")
+
+        # Filter out empty rows (where Question is empty)
+        if self.question_column:
+             # Convert to string, strip, and check for empty or 'nan'
+             def is_valid_question(q):
+                 if pd.isna(q): return False
+                 s = str(q).strip()
+                 return s != "" and s.lower() != "nan"
+             
+             self.checklist_df = self.checklist_df[self.checklist_df[self.question_column].apply(is_valid_question)]
+             self.checklist_df.reset_index(drop=True, inplace=True)
         
         # Add status columns if missing - UPDATED for structured responses
         required_cols = {
             'Risposta': '',           # Sì/No/Parziale/?
-            'Confidenza': '',         # 0-100%
+            'Confidenza': 0,          # 0-100 (int)
             'Giustificazione': '',    # Full justification
             'Status': 'PENDING',      # PENDING/DRAFT/APPROVED
             'Discussion_Log': ''      # Chat history
@@ -161,6 +188,13 @@ class ComplianceService:
                 return str(self.checklist_df.at[row_index, col])
         return "No question found"
     
+    def get_description_from_row(self, row_index: int) -> str:
+        """Extract description text from a row using detected column."""
+        if self.description_column and self.description_column in self.checklist_df.columns:
+            val = str(self.checklist_df.at[row_index, self.description_column])
+            return val if val != "nan" else ""
+        return ""
+
     def batch_analyze(self, max_items: int = 3) -> Dict[str, Any]:
         """
         Analyzes the first N items in the checklist in batch.
@@ -235,6 +269,7 @@ class ComplianceService:
             return "⚠️ No target documents loaded. Please upload documents to analyze."
         
         question = self.get_question_from_row(row_index)
+        description = self.get_description_from_row(row_index)
         
         # Build context for chat
         context_docs = "\n".join([f'  - Filename: "{doc["filename"]}", URI: "{doc["uri"]}"' for doc in self.context_pdf_uris]) if self.context_pdf_uris else "  (None)"
@@ -265,6 +300,7 @@ TARGET DOCUMENTS (Being Analyzed):
 {target_docs}
 
 CHECKLIST QUESTION: {question}
+ADDITIONAL DESCRIPTION/CONTEXT: {description}
 
 {current_analysis}
 
@@ -337,7 +373,7 @@ Be conversational and helpful. If you need to search the documents, do so and pr
         
         result = {
             'risposta': '?',
-            'confidenza': '0%',
+            'confidenza': 0, # Default to 0 int
             'giustificazione': response_text  # Fallback to full text
         }
         
@@ -349,7 +385,10 @@ Be conversational and helpful. If you need to search the documents, do so and pr
         # Extract CONFIDENZA
         conf_match = re.search(r'\*\*CONFIDENZA:\*\*\s*([0-9]+)%?', response_text, re.IGNORECASE)
         if conf_match:
-            result['confidenza'] = f"{conf_match.group(1)}%"
+            try:
+                result['confidenza'] = int(conf_match.group(1))
+            except ValueError:
+                result['confidenza'] = 0
         
         # Extract GIUSTIFICAZIONE (everything after the keyword)
         giust_match = re.search(r'\*\*GIUSTIFICAZIONE:\*\*\s*(.+)', response_text, re.IGNORECASE | re.DOTALL)
@@ -363,6 +402,7 @@ Be conversational and helpful. If you need to search the documents, do so and pr
         Runs the agent on a specific row.
         """
         logger.info(f"Analyzing row {row_index}", question[:100])
+        description = self.get_description_from_row(row_index)
         
         if not self.target_pdf_uris:
             logger.error("Analysis failed: No target PDFs loaded")
@@ -378,7 +418,7 @@ Be conversational and helpful. If you need to search the documents, do so and pr
         target_docs = "\n".join([f'  - Filename: "{doc["filename"]}", URI: "{doc["uri"]}"' for doc in self.target_pdf_uris])
         
         prompt = f"""
-You are analyzing TARGET documents for compliance. 
+        You are analyzing TARGET documents for compliance. 
         
         CONTEXT DOCUMENTS (Regulations/Policies - The Rules):
         {context_docs}
@@ -387,6 +427,7 @@ You are analyzing TARGET documents for compliance.
         {target_docs}
         
         CHECKLIST QUESTION: {question}
+        ADDITIONAL DESCRIPTION/DETAILS: {description}
         
         TASK: Verify if the TARGET documents comply with the requirements.
         If CONTEXT documents are provided, use them to understand the rules.
@@ -407,24 +448,21 @@ You are analyzing TARGET documents for compliance.
         
         final_response = ""
         for event in events:
-            if event.is_on_agent_call_start():
-                agent_name = event.agent_name
-                if agent_name != "user_proxy":
-                    # Make sure input parts exist and have text
-                    if event.input and event.input.parts and hasattr(event.input.parts[0], 'text'):
-                        input_content = event.input.parts[0].text
-                        logger.info(f"▶️ Agent '{agent_name}' INPUT:", f"\n{input_content}")
-            
-            if event.is_on_agent_call_end():
-                agent_name = event.agent_name
-                if agent_name != "user_proxy":
-                    # Make sure output parts exist and have text
-                    if event.output and event.output.parts and hasattr(event.output.parts[0], 'text'):
-                        output_content = event.output.parts[0].text
-                        logger.info(f"◀️ Agent '{agent_name}' OUTPUT:", f"\n{output_content}")
+            # Log content from agents
+            if event.content and event.content.parts:
+                try:
+                    text = event.content.parts[0].text
+                    if text:
+                        author = getattr(event, 'author', 'unknown')
+                        # Log intermediate outputs/thoughts if needed, or just keep track
+                        # logger.info(f"Event from '{author}': {text[:50]}...") 
+                        pass 
+                except Exception:
+                    pass
 
             if event.is_final_response() and event.content:
                 final_response = event.content.parts[0].text
+                logger.info(f"Final response received: {final_response[:100]}...")
         
         # Parse structured response
         parsed = self._parse_response(final_response)

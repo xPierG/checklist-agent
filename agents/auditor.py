@@ -32,14 +32,14 @@ For each question, you MUST respond in this EXACT format:
 - Spiegazione: [Why the target does/doesn't comply with the context rule]
 
 RULES:
-1. RISPOSTA must directly answer the question asked:
-   - If asked "Chi è il DPO?" → answer with the name
-   - If asked "Esiste una policy?" → answer "Sì" or "No"
-   - If asked "Quale processo?" → describe the process
-   - If you don't know → answer "?" or "Non trovato"
+1. RISPOSTA must be DIRECT and CONCISE:
+   - For YES/NO questions: Answer ONLY "Sì" or "No". NO extra words (put details in Giustificazione).
+   - For "Date" questions: Answer ONLY the date (e.g., "2023-10-12").
+   - For "Who/Department" questions: Answer ONLY the name (e.g., "Ufficio HR" or "Mario Rossi").
+   - If the answer is complex, be as brief as possible in the RISPOSTA field.
+   - If not found: Answer "Non trovato".
    
-   DO NOT just say Sì/No unless the question is a yes/no question.
-   ANSWER THE ACTUAL QUESTION.
+   EXTREMELY IMPORTANT: The "RISPOSTA" field must be short. All explanations go into "GIUSTIFICAZIONE".
 
 2. CONFIDENZA (0-100%):
    - 90-100%: Direct, explicit evidence found

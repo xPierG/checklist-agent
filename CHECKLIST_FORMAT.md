@@ -23,12 +23,15 @@ The Checklist Agent works with **three types of documents**:
 **Required Columns**:
 - **ID Column**: `ID`, `Item_ID`, `Number`, `No`, or `#`
 - **Question Column**: `Question`, `Requirement`, `Item`, `Description`, `Check`, or `Domanda`
+- **Description Column** (optional): `Description`, `Descrizione`, `Details`, `Dettagli`, `Note` (Provides context for the AI)
 - **Category** (optional): For grouping questions
 
+**Note**: Rows where the Question is empty will be automatically filtered out.
+
 **Auto-Generated Columns** (added by AI):
-- `🤖 Risposta`: Direct answer to the question
-- `🤖 Confidenza`: Confidence score (0-100%)
-- `🤖 Giustificazione`: Detailed justification with text snippets
+- `🤖 Risposta AI`: Direct answer to the question
+- `🤖 Confidenza Risposta`: Confidence score (0-100%)
+- `🤖 Spiegazione`: Detailed justification with text snippets
 - `📊 Status`: PENDING → DRAFT → APPROVED/REJECTED
 - `Discussion_Log`: Chat history for each item
 
@@ -54,6 +57,7 @@ The Checklist Agent works with **three types of documents**:
 3. Upload Checklist (required)
    ↓
 4. AI analyzes Target against Context rules
+   (Uses Question + Description for context)
    ↓
 5. Answers checklist questions with evidence
 ```
@@ -66,17 +70,17 @@ The Checklist Agent works with **three types of documents**:
 
 ### Example Structure
 
-| ID | Question | Category |
-|----|----------|----------|
-| 1  | Is there a DPO appointed? | Privacy |
-| 2  | Are access controls documented? | Security |
-| 3  | Is data retention policy defined? | Privacy |
+| ID | Domanda | Descrizione | Category |
+|----|----------|-------------|----------|
+| 1  | Is there a DPO appointed? | Check for name and contact info | Privacy |
+| 2  | Are access controls documented? | Look for password policies | Security |
+| 3  | Is data retention policy defined? | Check retention periods | Privacy |
 
 ### After AI Analysis
 
-| ID | Question | 🤖 Risposta | 🤖 Confidenza | 🤖 Giustificazione | 📊 Status |
+| ID | Domanda | 🤖 Risposta AI | 🤖 Confidenza Risposta | 🤖 Spiegazione | 📊 Status |
 |----|----------|-------------|---------------|-------------------|-----------|
-| 1  | Is there a DPO appointed? | Yes, John Doe | 95% | Context Rule: "GDPR Art. 37..."<br>Target Evidence: "Section 3.2 states..." | DRAFT |
+| 1  | Is there a DPO appointed? | Yes, John Doe | 95% | Context Rule: "GDPR Art. 37..."<br>Target Evidence: "Section 3.2..." | DRAFT |
 
 ## Best Practices
 1. Keep questions clear and specific

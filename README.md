@@ -45,7 +45,7 @@ Updated Checklist with AI Insights
     -   Direct answer to the question
     -   Confidence score (0-100%)
     -   Justification with text snippets from both context and target documents
--   **Flexible Column Detection**: Auto-detects ID and Question columns
+-   **Flexible Column Detection**: Auto-detects ID, Question, and **Description** columns
 -   **Batch Processing**: Analyze multiple items at once
 -   **Interactive Chat**: Discuss specific checklist items with the AI
 -   **Real-time Logging**: Activity monitor shows what the agent is doing
@@ -131,9 +131,9 @@ streamlit run app.py
 ### 4. Review Results
 
 The AI generates for each question:
--   **🤖 Risposta**: Direct answer based on evidence
--   **🤖 Confidenza**: Confidence score (0-100%)
--   **🤖 Giustificazione**: 
+-   **🤖 Risposta AI**: Direct answer based on evidence
+-   **🤖 Confidenza Risposta**: Confidence score (0-100%)
+-   **🤖 Spiegazione**: 
     -   Context Rule: Text from regulations
     -   Target Evidence: Text from your documents
     -   Sources for both
