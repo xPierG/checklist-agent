@@ -300,7 +300,7 @@ TARGET DOCUMENTS (Being Analyzed):
 {target_docs}
 
 CHECKLIST QUESTION: {question}
-ADDITIONAL DESCRIPTION/CONTEXT: {description}
+ADDITIONAL DESCRIPTION/CONTEXT related to the checklist question: {description}
 
 {current_analysis}
 
@@ -427,7 +427,7 @@ Be conversational and helpful. If you need to search the documents, do so and pr
         {target_docs}
         
         CHECKLIST QUESTION: {question}
-        ADDITIONAL DESCRIPTION/DETAILS: {description}
+        ADDITIONAL DESCRIPTION/DETAILS related to the checklist question: {description}
         
         TASK: Verify if the TARGET documents comply with the requirements.
         If CONTEXT documents are provided, use them to understand the rules.
@@ -447,6 +447,8 @@ Be conversational and helpful. If you need to search the documents, do so and pr
         )
         
         final_response = ""
+        current_agent = None
+        
         for event in events:
             # Log content from agents
             if event.content and event.content.parts:
@@ -454,15 +456,29 @@ Be conversational and helpful. If you need to search the documents, do so and pr
                     text = event.content.parts[0].text
                     if text:
                         author = getattr(event, 'author', 'unknown')
-                        # Log intermediate outputs/thoughts if needed, or just keep track
-                        # logger.info(f"Event from '{author}': {text[:50]}...") 
-                        pass 
+                        
+                        # Detect agent changes and log clearly
+                        if author != current_agent and author != 'user':
+                            current_agent = author
+                            
+                            if 'Librarian' in author or 'librarian' in author.lower():
+                                logger.info("=" * 80)
+                                logger.info("📚 LIBRARIAN CHIAMATO")
+                                logger.info("=" * 80)
+                                logger.info(f"OUTPUT LIBRARIAN:\n{text}")
+                                logger.info("=" * 80)
+                            elif 'Auditor' in author or 'auditor' in author.lower():
+                                logger.info("=" * 80)
+                                logger.info("⚖️ AUDITOR CHIAMATO")
+                                logger.info("=" * 80)
+                                logger.info(f"OUTPUT AUDITOR:\n{text}")
+                                logger.info("=" * 80)
                 except Exception:
                     pass
 
             if event.is_final_response() and event.content:
                 final_response = event.content.parts[0].text
-                logger.info(f"Final response received: {final_response[:100]}...")
+                logger.success(f"✅ Risposta finale ricevuta: {final_response[:100]}...")
         
         # Parse structured response
         parsed = self._parse_response(final_response)
