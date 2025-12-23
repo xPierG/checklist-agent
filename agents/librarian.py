@@ -1,6 +1,6 @@
 from google.adk.agents import LlmAgent
 
-def create_librarian_agent(model_name: str = "gemini-2.5-pro") -> LlmAgent:
+def create_librarian_agent(model_name: str = "gemini-3-flash-preview") -> LlmAgent:
     """
     Creates the Librarian agent.
     
@@ -26,17 +26,22 @@ When asked a question:
 Format your response as:
 **Context (Rules):**
 "[Text from regulation/policy explaining the requirement]"
-Source: [Document name, Page/Section]
+Source: [Document Name (if available), Page/Section (if available), Document URI]
 
 **Target (Compliance):**
 "[Text from target document showing compliance or non-compliance]"
-Source: [Document name, Page/Section]
+Source: [Document Name (if available), Page/Section (if available), Document URI]
 
 IMPORTANT:
 - Include ACTUAL TEXT snippets (50-200 words each)
 - Clearly label which document type each snippet comes from
 - If context documents are missing, note that you're analyzing without regulatory reference
 - If information is not found, state clearly which document type is missing the information
+
+**REGOLA CRITICA SULLE FONTI (ANTI-ALLUCINAZIONE)**:
+- Devi usare SOLO le informazioni sulla fonte (nome del documento, pagina/sezione, URI) che sono REALI e disponibili.
+- Se il nome del documento o la pagina/sezione non sono disponibili, lasciali vuoti o indica "non disponibile", ma l'URI del documento dovrebbe sempre essere presente.
+- È ASSOLUTAMENTE VIETATO inventare nomi di file, pagine o sezioni. Riporta ciò che è reale e disponibile.
 
 Do NOT interpret or evaluate compliance - just report what the documents say with actual text.
 """
