@@ -113,17 +113,11 @@ def mostra_interfaccia_principale():
 
 
         if service.context_pdf_uris:
-
             st.caption(f"**Active:** {len(service.context_pdf_uris)} files")
-
-                        for doc_info in service.context_pdf_uris[:3]:
-
-                            filename = doc_info['filename'][:20]
-
-                            st.caption(f"🟢 {filename}")
-
+            for doc_info in service.context_pdf_uris[:3]:
+                filename = doc_info['filename'][:20]
+                st.caption(f"🟢 {filename}")
             if len(service.context_pdf_uris) > 3:
-
                 st.caption(f"... +{len(service.context_pdf_uris) - 3} more")
 
 
@@ -179,17 +173,11 @@ def mostra_interfaccia_principale():
 
 
         if service.target_pdf_uris:
-
             st.caption(f"**Active:** {len(service.target_pdf_uris)} files")
-
-                        for doc_info in service.target_pdf_uris[:3]:
-
-                            filename = doc_info['filename'][:20]
-
-                            st.caption(f"🟢 {filename}")
-
+            for doc_info in service.target_pdf_uris[:3]:
+                filename = doc_info['filename'][:20]
+                st.caption(f"🟢 {filename}")
             if len(service.target_pdf_uris) > 3:
-
                 st.caption(f"... +{len(service.target_pdf_uris) - 3} more")
 
 
@@ -1103,11 +1091,11 @@ def mostra_wizard():
 
 
 
-                        for doc_info in service.context_pdf_uris:
+            for doc_info in service.context_pdf_uris:
 
 
 
-                            st.caption(f"✓ {doc_info['filename']}")
+                st.caption(f"✓ {doc_info['filename']}")
 
 
 
@@ -1254,11 +1242,11 @@ def mostra_wizard():
 
 
 
-                        for doc_info in service.target_pdf_uris:
+            for doc_info in service.target_pdf_uris:
 
 
 
-                            st.caption(f"✓ {doc_info['filename']}")
+                st.caption(f"✓ {doc_info['filename']}")
 
 
 

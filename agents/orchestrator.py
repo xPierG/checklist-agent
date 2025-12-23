@@ -10,7 +10,7 @@ class ComplianceOrchestrator(SequentialAgent):
     """
     pass
 
-def create_orchestrator_agent(model_name: str = "gemini-2.0-flash-lite") -> SequentialAgent:
+def create_orchestrator_agent(model_name: str = "gemini-3-flash-preview") -> SequentialAgent:
     """
     Creates the Orchestrator agent (as a Sequential Pipeline for V1).
     
