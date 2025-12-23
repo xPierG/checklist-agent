@@ -20,7 +20,7 @@ A compliance assistance platform built with Google Agent Development Kit (ADK) t
 | Component | Technology | Version/Details |
 |-----------|-----------|-----------------|
 | **Agent Framework** | Google ADK | Python SDK |
-| **AI Models** | Google Gemini | 2.5-flash-lite (Orchestrator/Librarian)<br>3-pro-preview (Auditor) |
+| **AI Models** | Google Gemini | 3-flash-preview (Orchestrator/Librarian/Auditor) |
 | **Frontend** | Streamlit | Python-native web UI |
 | **Document Processing** | Gemini File API | PDF upload & caching |
 | **Data Format** | Excel/Pandas | Checklist I/O |
@@ -40,14 +40,14 @@ User Request → Orchestrator → Librarian → Auditor → Response
 
 ### **🎯 Agent 1: The Orchestrator (ComplianceOrchestrator)**
 - **Type**: `SequentialAgent` (ADK)
-- **Model**: `gemini-2.5-flash-lite`
+- **Model**: `gemini-3-flash-preview`
 - **Role**: Workflow coordinator
 - **Responsibility**: Routes requests through Librarian → Auditor pipeline
 - **Implementation**: `agents/orchestrator.py`
 
 ### **📚 Agent 2: The Librarian**
 - **Type**: `LlmAgent` (ADK)
-- **Model**: `gemini-2.5-flash-lite`
+- **Model**: `gemini-3-flash-preview`
 - **Role**: Document retrieval specialist
 - **Responsibility**: 
   - Accesses PDF documents via Gemini File API
@@ -58,7 +58,7 @@ User Request → Orchestrator → Librarian → Auditor → Response
 
 ### **⚖️ Agent 3: The Auditor**
 - **Type**: `LlmAgent` (ADK)
-- **Model**: `gemini-3-pro-preview`
+- **Model**: `gemini-3-flash-preview`
 - **Role**: Compliance risk specialist
 - **Responsibility**:
   - Evaluates compliance based on Librarian's evidence
@@ -117,9 +117,10 @@ User Request → Orchestrator → Librarian → Auditor → Response
   - 📥 Load Checklist button
 
 #### **Main Area: Column 1 (Checklist Grid)**
-- Full dataframe display with all columns
-- Row selection dropdown
-- "Analyze Selected Row" button
+- Interactive dataframe display with dynamic column management.
+- Includes row number, Status, ID, Question, Description, and AI-generated fields.
+- Justification Viewer: A dedicated section to view full justification for selected row.
+- Row selection dropdown for individual analysis.
 - Real-time status indicators:
   - Empty = Not analyzed
   - `DRAFT` = AI proposal ready
@@ -166,9 +167,10 @@ User Request → Orchestrator → Librarian → Auditor → Response
 
 | Column | Purpose | Example Value |
 |--------|---------|---------------|
-| `AI_Proposal` | Agent's compliance assessment | "YES - AES-256 encryption confirmed on page 12" |
-| `Discussion_Log` | Chat summary *(V2)* | "User asked about RSA, agent clarified..." |
-| `Final_Answer` | User-validated answer *(V2)* | "YES, RSA 2048" |
+| `Risposta AI` | Agent's direct answer | "Sì" |
+| `Confidenza Risposta` | Confidence score (0-100%) | 95% |
+| `Spiegazione` | Detailed justification with evidence | "Contesto: Art. 37 GDPR... Evidenza: Sezione 3.2..." |
+| `Discussion_Log` | Chat history for the item | "User asked why... Agent clarified..." |
 | `Status` | Workflow state | `DRAFT` / `VALIDATED` |
 
 ---
@@ -286,9 +288,9 @@ streamlit run app.py
 
 | Agent | Model | Reasoning |
 |-------|-------|-----------|
-| **Orchestrator** | gemini-2.5-flash-lite | Fast routing, low cost |
-| **Librarian** | gemini-2.5-flash-lite | Quick document search, grounding |
-| **Auditor** | gemini-3-pro-preview | Deep reasoning, compliance evaluation |
+| **Orchestrator** | gemini-3-flash-preview | Fast routing, low cost |
+| **Librarian** | gemini-3-flash-preview | Quick document search, grounding |
+| **Auditor** | gemini-3-flash-preview | Deep reasoning, compliance evaluation |
 
 **Cost Optimization**: Use Flash for retrieval, Pro for analysis.
 
