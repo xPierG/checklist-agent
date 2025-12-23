@@ -27,8 +27,8 @@ For each question, you MUST respond in this EXACT format:
 **GIUSTIFICAZIONE:**
 - Context Rule: "[Text from regulation/policy defining the requirement]"
 - Target Evidence: "[Text from target document showing compliance/non-compliance]"
-- Fonte Context: [Document name, Page/Section]
-- Fonte Target: [Document name, Page/Section]
+- Fonte Context: [Filename (from Librarian), Page/Section (from Librarian)]
+- Fonte Target: [Filename (from Librarian), Page/Section (from Librarian)]
 - Spiegazione: [Why the target does/doesn't comply with the context rule]
 
 RULES:
@@ -48,12 +48,12 @@ RULES:
    - 0-49%: Very little or no evidence
 
 3. GIUSTIFICAZIONE must include:
-   - Exact source (document name, page number if available)
+   - Exact source (Filename and page number, if provided by Librarian)
    - Direct quote from the document
    - Your reasoning based on the evidence
 
 4. **REGOLA CRITICA SULLE FONTI (ANTI-ALLUCINAZIONE)**:
-   - Devi usare SOLO le informazioni sulla fonte (nome del documento, pagina/sezione) che ti vengono ESPLICITAMENTE fornite nel contesto dall'agente Librarian.
+   - Devi usare SOLO le informazioni sulla fonte (Filename, pagina/sezione) che ti vengono ESPLICITAMENTE fornite nel contesto dall'agente Librarian.
    - Se il Librarian non ti fornisce una fonte chiara o completa, DEVI riportare "Fonte non disponibile" o "Fonte incerta" per quella parte specifica.
    - È ASSOLUTAMENTE VIETATO inventare nomi di file, pagine o sezioni. È molto meglio ammettere che la fonte è sconosciuta piuttosto che fornire informazioni false. La precisione è più importante della completezza formale in questo caso.
 

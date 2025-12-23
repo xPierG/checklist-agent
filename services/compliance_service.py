@@ -54,11 +54,12 @@ class ComplianceService:
         Uploads a CONTEXT PDF (regulation/policy) and returns URI.
         These are the documents that define the rules.
         """
-        logger.info(f"Loading CONTEXT PDF: {os.path.basename(file_path)}")
+        filename = os.path.basename(file_path)
+        logger.info(f"Loading CONTEXT PDF: {filename}")
         try:
             pdf_uri = self.pdf_loader.upload_and_cache(file_path)
-            self.context_pdf_uris.append(pdf_uri)
-            logger.success(f"Context PDF uploaded", f"URI: {pdf_uri} (Total context: {len(self.context_pdf_uris)})")
+            self.context_pdf_uris.append({"filename": filename, "uri": pdf_uri})
+            logger.success(f"Context PDF uploaded", f"File: {filename}, URI: {pdf_uri} (Total context: {len(self.context_pdf_uris)})")
             return pdf_uri
         except Exception as e:
             logger.error(f"Failed to upload context PDF", str(e))
@@ -69,11 +70,12 @@ class ComplianceService:
         Uploads a TARGET PDF (document to analyze) and returns URI.
         These are the documents to verify against the rules.
         """
-        logger.info(f"Loading TARGET PDF: {os.path.basename(file_path)}")
+        filename = os.path.basename(file_path)
+        logger.info(f"Loading TARGET PDF: {filename}")
         try:
             pdf_uri = self.pdf_loader.upload_and_cache(file_path)
-            self.target_pdf_uris.append(pdf_uri)
-            logger.success(f"Target PDF uploaded", f"URI: {pdf_uri} (Total target: {len(self.target_pdf_uris)})")
+            self.target_pdf_uris.append({"filename": filename, "uri": pdf_uri})
+            logger.success(f"Target PDF uploaded", f"File: {filename}, URI: {pdf_uri} (Total target: {len(self.target_pdf_uris)})")
             return pdf_uri
         except Exception as e:
             logger.error(f"Failed to upload target PDF", str(e))
@@ -82,11 +84,12 @@ class ComplianceService:
     @property
     def pdf_uri(self):
         """Backward compatibility: return first target PDF URI or None."""
-        return self.target_pdf_uris[0] if self.target_pdf_uris else None
+        return self.target_pdf_uris[0]['uri'] if self.target_pdf_uris else None
     
     @property
     def pdf_uris(self):
         """Backward compatibility: return all PDFs (context + target)."""
+        # This returns a list of dictionaries
         return self.context_pdf_uris + self.target_pdf_uris
 
     def load_checklist(self, file_path: str) -> pd.DataFrame:
@@ -234,8 +237,8 @@ class ComplianceService:
         question = self.get_question_from_row(row_index)
         
         # Build context for chat
-        context_docs = "\n".join([f"  - {uri}" for uri in self.context_pdf_uris]) if self.context_pdf_uris else "  (None)"
-        target_docs = "\n".join([f"  - {uri}" for uri in self.target_pdf_uris])
+        context_docs = "\n".join([f'  - Filename: "{doc["filename"]}", URI: "{doc["uri"]}"' for doc in self.context_pdf_uris]) if self.context_pdf_uris else "  (None)"
+        target_docs = "\n".join([f'  - Filename: "{doc["filename"]}", URI: "{doc["uri"]}"' for doc in self.target_pdf_uris])
         
         # Get current analysis if available
         current_analysis = ""
@@ -320,8 +323,8 @@ Be conversational and helpful. If you need to search the documents, do so and pr
                 user_id=user_id, 
                 session_id=session_id,
                 state={
-                    "context_pdf_uris": self.context_pdf_uris,
-                    "target_pdf_uris": self.target_pdf_uris
+                    "context_pdf_info": self.context_pdf_uris, # pass list of dicts
+                    "target_pdf_info": self.target_pdf_uris  # pass list of dicts
                 }
             ))
 
@@ -371,11 +374,11 @@ Be conversational and helpful. If you need to search the documents, do so and pr
         self._get_or_create_session(user_id, session_id)
 
         # Construct prompt with context and target documents
-        context_docs = "\n".join([f"  - {uri}" for uri in self.context_pdf_uris]) if self.context_pdf_uris else "  (None - analyzing without regulatory context)"
-        target_docs = "\n".join([f"  - {uri}" for uri in self.target_pdf_uris])
+        context_docs = "\n".join([f'  - Filename: "{doc["filename"]}", URI: "{doc["uri"]}"' for doc in self.context_pdf_uris]) if self.context_pdf_uris else "  (None - analyzing without regulatory context)"
+        target_docs = "\n".join([f'  - Filename: "{doc["filename"]}", URI: "{doc["uri"]}"' for doc in self.target_pdf_uris])
         
         prompt = f"""
-        You are analyzing TARGET documents for compliance.
+You are analyzing TARGET documents for compliance. 
         
         CONTEXT DOCUMENTS (Regulations/Policies - The Rules):
         {context_docs}
@@ -387,6 +390,7 @@ Be conversational and helpful. If you need to search the documents, do so and pr
         
         TASK: Verify if the TARGET documents comply with the requirements.
         If CONTEXT documents are provided, use them to understand the rules.
+        When citing a source, use the 'Filename' provided in the document list.
         Otherwise, answer based on general best practices.
         
         Provide a structured response with answer, confidence, and justification including text snippets.
@@ -403,6 +407,22 @@ Be conversational and helpful. If you need to search the documents, do so and pr
         
         final_response = ""
         for event in events:
+            if event.is_on_agent_call_start():
+                agent_name = event.agent_name
+                if agent_name != "user_proxy":
+                    # Make sure input parts exist and have text
+                    if event.input and event.input.parts and hasattr(event.input.parts[0], 'text'):
+                        input_content = event.input.parts[0].text
+                        logger.info(f"▶️ Agent '{agent_name}' INPUT:", f"\n{input_content}")
+            
+            if event.is_on_agent_call_end():
+                agent_name = event.agent_name
+                if agent_name != "user_proxy":
+                    # Make sure output parts exist and have text
+                    if event.output and event.output.parts and hasattr(event.output.parts[0], 'text'):
+                        output_content = event.output.parts[0].text
+                        logger.info(f"◀️ Agent '{agent_name}' OUTPUT:", f"\n{output_content}")
+
             if event.is_final_response() and event.content:
                 final_response = event.content.parts[0].text
         
@@ -417,29 +437,6 @@ Be conversational and helpful. If you need to search the documents, do so and pr
         
         logger.success(f"Row {row_index} analyzed", f"Answer: {parsed['risposta']}, Confidence: {parsed['confidenza']}")
         
-        return final_response
-
-    def chat_with_row(self, row_index: int, message: str) -> str:
-        """
-        Continues the conversation for a specific row.
-        """
-        user_id = "user_default"
-        session_id = f"session_row_{row_index}"
-        
-        self._get_or_create_session(user_id, session_id)
-        
-        content = types.Content(role='user', parts=[types.Part(text=message)])
-        events = self.runner.run(
-            user_id=user_id, 
-            session_id=session_id, 
-            new_message=content
-        )
-        
-        final_response = ""
-        for event in events:
-            if event.is_final_response() and event.content:
-                final_response = event.content.parts[0].text
-                
         return final_response
 
     def get_dataframe(self) -> pd.DataFrame:
