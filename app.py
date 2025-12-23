@@ -739,6 +739,58 @@ def mostra_interfaccia_principale():
                     # wait, creating 'editor_df' preserves index.
                     if idx in st.session_state.checklist_df.index:
                         st.session_state.checklist_df.at[idx, 'Status'] = row['Status']
+            
+            # Add view justification buttons
+            st.markdown("**💬 Visualizza Spiegazione Completa:**")
+            st.caption("Clicca per vedere la giustificazione completa di ogni riga")
+            
+            # Create buttons in a grid (max 10 per row)
+            num_rows_display = len(display_df)
+            cols_per_row = 10
+            
+            for i in range(0, num_rows_display, cols_per_row):
+                cols = st.columns(min(cols_per_row, num_rows_display - i))
+                for j, col in enumerate(cols):
+                    if i + j < num_rows_display:
+                        row_idx = display_df.index[i + j]
+                        row_num = row_idx + 1
+                        
+                        with col:
+                            if st.button(f"#{row_num}", key=f"view_just_{row_idx}", use_container_width=True):
+                                st.session_state.view_justification_row = row_idx
+            
+            # Display justification in expander if a row is selected
+            if 'view_justification_row' in st.session_state and st.session_state.view_justification_row is not None:
+                selected_idx = st.session_state.view_justification_row
+                if selected_idx in display_df.index:
+                    row_data = display_df.loc[selected_idx]
+                    
+                    with st.expander(f"📄 Spiegazione Completa - Riga #{selected_idx + 1}", expanded=True):
+                        col1, col2 = st.columns([3, 1])
+                        with col1:
+                            question = service.get_question_from_row(selected_idx)
+                            st.markdown(f"**Domanda:** {question}")
+                        with col2:
+                            if st.button("✖️ Chiudi", key="close_just"):
+                                st.session_state.view_justification_row = None
+                                st.rerun()
+                        
+                        st.markdown("---")
+                        
+                        # Show Answer and Confidence
+                        col_a, col_b = st.columns(2)
+                        with col_a:
+                            st.markdown(f"**Risposta AI:** {row_data.get('Risposta', 'N/A')}")
+                        with col_b:
+                            conf = row_data.get('Confidenza', 0)
+                            st.markdown(f"**Confidenza:** {conf}%")
+                        
+                        st.markdown("---")
+                        
+                        # Show full justification
+                        st.markdown("**Spiegazione Completa:**")
+                        justification = row_data.get('Giustificazione', 'Nessuna giustificazione disponibile')
+                        st.markdown(justification)
 
         
 
