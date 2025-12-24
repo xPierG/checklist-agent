@@ -342,6 +342,14 @@ def mostra_interfaccia_principal():
                         progress_bar.progress(i / total)
                         if i < total: time.sleep(1) # Small delay
                     status.update(label=f"✅ Batch Complete! Analyzed {total} rows", state="complete")
+                    sac.alert(
+                        message="Batch Analysis Completed!",
+                        description="Please navigate to the **DASHBOARD** tab to review the updated checklist and results.",
+                        type='info',
+                        showIcon=True,
+                        closable=False,
+                        key="batch_complete_alert"
+                    )
                 st.session_state.checklist_df = service.get_dataframe()
                 st.rerun()
 
