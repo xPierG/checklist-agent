@@ -9,6 +9,14 @@ from utils.logger import logger
 # Page Config
 st.set_page_config(layout="wide", page_title="ADK Compliance Agent")
 
+# Function to load css
+def load_css(file_name):
+    with open(file_name) as f:
+        st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+
+# Load custom CSS
+load_css("assets/style.css")
+
 # Initialize Service in Session State
 if "service" not in st.session_state:
     auth_mode = os.environ.get("AUTH_MODE", "ADC") # Read AUTH_MODE, default to ADC

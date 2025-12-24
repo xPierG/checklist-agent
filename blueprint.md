@@ -107,34 +107,26 @@ User Request → Orchestrator → Librarian → Auditor → Response
 
 ## **5. UI/UX Specification**
 
-### **Layout**: Wide Mode, Two-Column Split
+### **Layout**: Tabbed Interface
+The application uses a main tabbed interface to separate distinct workflows, built with `streamlit-antd-components` for a modern look and feel. The primary tabs are:
+- **Dashboard**: For high-level progress metrics and the main checklist view.
+- **Analyze & Discuss**: A focused workspace for deep-diving into a single checklist item, including its analysis and a contextual chat.
+- **Batch Analysis**: A dedicated area for running analysis on multiple items at once.
+- **Activity Logs**: A real-time log of agent actions for transparency.
 
-#### **Sidebar (Left)**
+### **Component Library**
+- **UI Components**: `streamlit-antd-components` is used to provide a more professional and app-like experience than native Streamlit components. This includes cards, grids, and styled buttons.
+
+### **Typography**
+- **Font**: The application uses the **Inter** font, served from Google Fonts.
+- **Implementation**: The font is loaded and applied globally via the `assets/style.css` file to ensure a consistent, modern, and highly readable interface suitable for enterprise use.
+
+### **Sidebar (Left)**
 - **Project Controls**:
   - 📄 Upload Policy Document (PDF)
   - 📊 Upload Checklist (Excel)
   - 🔄 Process PDF button
   - 📥 Load Checklist button
-
-#### **Main Area: Column 1 (Checklist Grid)**
-- Interactive dataframe display with dynamic column management.
-- Includes row number, Status, ID, Question, Description, and AI-generated fields.
-- Justification Viewer: A dedicated section to view full justification for selected row.
-- Row selection dropdown for individual analysis.
-- Real-time status indicators:
-  - Empty = Not analyzed
-  - `DRAFT` = AI proposal ready
-  - `VALIDATED` = User confirmed *(V2)*
-
-#### **Main Area: Column 2 (Contextual Chat)**
-- **Header**: "Discussing Row {index}"
-- **Chat History**: 
-  - Persisted per row in `st.session_state[chat_history_{row_index}]`
-  - Displays user/assistant messages
-- **Input**: `st.chat_input()` for follow-up questions
-- **Future Actions** *(V2)*:
-  - ✅ Accept Answer
-  - ✏️ Manual Override
 
 ---
 
@@ -181,6 +173,8 @@ User Request → Orchestrator → Librarian → Auditor → Response
 ```
 checklist-agent/
 ├── app.py                          # Streamlit UI
+├── assets/
+│   └── style.css                   # Custom CSS for fonts and styling
 ├── services/
 │   └── compliance_service.py       # Facade for ADK agents
 ├── agents/
