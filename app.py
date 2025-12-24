@@ -270,7 +270,7 @@ def mostra_interfaccia_principal():
                 if desc:
                     st.caption(f"**Description:** {desc}")
                 
-                sac.divider(dashed=True)
+                sac.divider()
                 
                 res_col1, res_col2 = st.columns(2)
                 res_col1.metric("AI Answer", row_data.get('Risposta', 'N/A'))
