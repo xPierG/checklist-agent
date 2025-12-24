@@ -343,7 +343,7 @@ def mostra_interfaccia_principal():
                         if i < total: time.sleep(1) # Small delay
                     status.update(label=f"✅ Batch Complete! Analyzed {total} rows", state="complete")
                     sac.alert(
-                        message="Batch Analysis Completed!",
+                        label="Batch Analysis Completed!",
                         description="Please navigate to the **DASHBOARD** tab to review the updated checklist and results.",
                         type='info',
                         showIcon=True,
@@ -374,7 +374,7 @@ def mostra_interfaccia_principal():
                 else: # info
                     alert_type = 'info'
                 
-                sac.alert(message=f"**{act['message']}**", description=act.get('details'), showIcon=True, type=alert_type, closable=True, key=f"log_{i}")
+                sac.alert(label=f"**{act['message']}**", description=act.get('details'), showIcon=True, type=alert_type, closable=True, key=f"log_{i}")
 
 def mostra_wizard():
     """
