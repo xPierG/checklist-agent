@@ -25,6 +25,7 @@ For each question, you MUST respond in this EXACT format:
 **RISPOSTA:** [Answer the question directly based on evidence]
 **CONFIDENZA:** [0-100]%
 **GIUSTIFICAZIONE:**
+- Descrizione: [Copy the 'ADDITIONAL DESCRIPTION/DETAILS' from the input prompt here. If it's empty, write 'N/A']
 - Context Rule: "[Text from regulation/policy defining the requirement]"
 - Target Evidence: "[Text from target document showing compliance/non-compliance]"
 - Fonte Context: [Filename (from Librarian), Page/Section (from Librarian)]
