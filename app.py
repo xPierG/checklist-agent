@@ -167,10 +167,7 @@ def mostra_interfaccia_principale():
         completed = len(df[df['Status'].isin(['APPROVED', 'REJECTED'])])
         completion_rate = (completed / total_items * 100) if total_items > 0 else 0
         
-        sac.segmented_control(
-            items=[sac.SegmentedItem(label=f"{completion_rate:.1f}% Complete")],
-            disabled=True, full_width=True
-        )
+        sac.chip(label=f"{completion_rate:.1f}% Complete", icon='award', variant='light')
         st.progress(completion_rate / 100)
         
         sac.grid([
@@ -182,7 +179,7 @@ def mostra_interfaccia_principale():
         ], grow=True)
         
         st.subheader("📋 Checklist")
-        filter_selection = sac.segmented_control(
+        filter_selection = sac.segmented(
             items=["All", "Pending", "Draft", "Approved", "Rejected"],
             align='center',
             size='sm'
@@ -299,7 +296,7 @@ def mostra_interfaccia_principale():
     elif selected_tab == 'BATCH ANALYSIS':
         st.subheader("🚀 Batch Analysis")
         with sac.card(title="Batch Processing Options", icon='gear', padding=20):
-            batch_mode = sac.segmented_control(
+            batch_mode = sac.segmented(
                 items=["All Pending", "Range", "Specific Rows"],
                 align='center'
             )
