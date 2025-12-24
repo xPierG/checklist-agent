@@ -33,7 +33,7 @@ service = st.session_state.service
 if "selected_row" not in st.session_state:
     st.session_state.selected_row = 0
 
-def mostra_interfaccia_principale():
+def mostra_interfaccia_principal():
     """
     Renders the main application interface using a tabbed layout and Mantine components.
     """
@@ -176,10 +176,10 @@ def mostra_interfaccia_principale():
             completed = len(df[df['Status'].isin(['APPROVED', 'REJECTED'])])
             completion_rate = (completed / total_items * 100) if total_items > 0 else 0
             
-            sac.chip(label=f"{completion_rate:.1f}% Complete", variant='light')
+            sac.tag(label=f"{completion_rate:.1f}% Complete", color='blue') # Changed sac.chip to sac.tag and removed icon/variant
             st.progress(completion_rate / 100)
             
-            # Use st.metric for cards as sac.card is not available
+            # Replaced sac.grid(sac.card) with st.columns(st.metric) as sac.card is not available
             m_col1, m_col2, m_col3, m_col4, m_col5 = st.columns(5)
             m_col1.metric("Total Items", total_items)
             m_col2.metric("Pending", len(df[df['Status'] == 'PENDING']))
@@ -359,14 +359,17 @@ def mostra_interfaccia_principale():
             st.info("No activities logged yet.")
         else:
             for i, act in enumerate(activities):
-                if act['level'] == 'SUCCESS':
-                    sac.alert(label=f"**{act['message']}**", description=act.get('details'), icon=True, color='green', closable=True, key=f"log_{i}")
-                elif act['level'] == 'ERROR':
-                    sac.alert(label=f"**{act['message']}**", description=act.get('details'), icon=True, color='red', closable=True, key=f"log_{i}")
-                elif act['level'] == 'WARNING':
-                    sac.alert(label=f"**{act['message']}**", description=act.get('details'), icon=True, color='yellow', closable=True, key=f"log_{i}")
-                else: # INFO
-                    sac.alert(label=f"**{act['message']}**", description=act.get('details'), icon=True, color='blue', closable=True, key=f"log_{i}")
+                log_type = act['level'].lower()
+                if log_type == 'success':
+                    alert_type = 'success'
+                elif log_type == 'error':
+                    alert_type = 'error'
+                elif log_type == 'warning':
+                    alert_type = 'warning'
+                else: # info
+                    alert_type = 'info'
+                
+                sac.alert(message=f"**{act['message']}**", description=act.get('details'), showIcon=True, type=alert_type, closable=True, key=f"log_{i}")
 
 def mostra_wizard():
     """
@@ -469,4 +472,4 @@ def mostra_wizard():
 if st.session_state.get('wizard_mode', True):
     mostra_wizard()
 else:
-    mostra_interfaccia_principale()
+    mostra_interfaccia_principal()
