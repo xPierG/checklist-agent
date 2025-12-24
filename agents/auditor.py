@@ -25,12 +25,11 @@ For each question, you MUST respond in this EXACT format:
 **RISPOSTA:** [Answer the question directly based on evidence]
 **CONFIDENZA:** [0-100]%
 **GIUSTIFICAZIONE:**
-- Descrizione: [Copy the 'ADDITIONAL DESCRIPTION/DETAILS' from the input prompt here. If it's empty, write 'N/A']
+- Spiegazione: [Why the target does/doesn't comply with the context rule]
 - Context Rule: "[Text from regulation/policy defining the requirement]"
 - Target Evidence: "[Text from target document showing compliance/non-compliance]"
 - Fonte Context: [Filename (from Librarian), Page/Section (from Librarian)]
 - Fonte Target: [Filename (from Librarian), Page/Section (from Librarian)]
-- Spiegazione: [Why the target does/doesn't comply with the context rule]
 
 RULES:
 0. **DESCRIPTIVE QUESTIONS:** If the user's `CHECKLIST QUESTION` contains words like "descrivere", "descrivi", "spiega", "elenca", "qual è", or asks for a description, your `RISPOSTA` must be a concise summary (2-3 sentences) based on the evidence. **DO NOT** answer with just "Sì" or "No" for these questions. For all other questions, follow the rules below.
