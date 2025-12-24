@@ -14,14 +14,7 @@ if "service" not in st.session_state:
     auth_mode = os.environ.get("AUTH_MODE", "ADC") # Read AUTH_MODE, default to ADC
     try:
         st.session_state.service = ComplianceService(auth_mode=auth_mode) # Pass auth_mode
-        # Use a toast for success message
-        sac.notification(
-            label=f"Service Initialized",
-            description=f"Authentication Mode: {auth_mode}",
-            type='success',
-            placement='topRight',
-            duration=3
-        )
+        st.toast(f"✅ Service Initialized (Auth Mode: {auth_mode})")
     except Exception as e:
         st.error(f"Failed to initialize service: {e}")
         st.stop()
@@ -69,7 +62,7 @@ def mostra_interfaccia_principale():
                                 f.write(uploaded_pdf.getbuffer())
                             service.load_context_pdf(temp_path)
                             os.remove(temp_path)
-                        sac.notification('Rules Loaded', f'{len(uploaded_context_pdfs)} files processed.', type='success', placement='topRight')
+                        st.toast(f'✅ Rules Loaded: {len(uploaded_context_pdfs)} files processed.')
 
             if service.context_pdf_uris:
                 st.caption(f"**Active:** {len(service.context_pdf_uris)} files")
@@ -93,7 +86,7 @@ def mostra_interfaccia_principale():
                                 f.write(uploaded_pdf.getbuffer())
                             service.load_target_pdf(temp_path)
                             os.remove(temp_path)
-                        sac.notification('Content Loaded', f'{len(uploaded_target_pdfs)} files processed.', type='success', placement='topRight')
+                        st.toast(f'✅ Content Loaded: {len(uploaded_target_pdfs)} files processed.')
 
             if service.target_pdf_uris:
                 st.caption(f"**Active:** {len(service.target_pdf_uris)} files")
@@ -113,9 +106,9 @@ def mostra_interfaccia_principale():
                     df = service.load_checklist(uploaded_excel)
                     st.session_state.checklist_df = df
                     if service.question_column:
-                        sac.notification('Checklist Loaded', f'{len(df)} items found.', type='success', placement='topRight')
+                        st.toast(f'✅ Checklist Loaded: {len(df)} items found.')
                     else:
-                        sac.notification('Load Failed', 'Could not detect required columns.', type='error', placement='topRight')
+                        st.error('⚠️ Load Failed: Could not detect required columns.')
 
             if service.checklist_df is not None:
                 pending = len(service.checklist_df[service.checklist_df['Status'] == 'PENDING'])
@@ -382,7 +375,7 @@ def mostra_wizard():
         This wizard will guide you through loading the necessary documents to start a compliance analysis.
         The process is divided into 3 simple steps:
         1.  **Upload Checklist**: The Excel or CSV file with the requirements to be verified.
-        2.  **Upload Context**: The PDF documents containing the rules, laws, and standards.
+        2.  **Upload Context**: the PDF documents containing the rules, laws, and standards.
         3.  **Upload Target**: The PDF documents to be analyzed for compliance.
         At the end, you will be redirected to the main interface to start the analysis.
         """)
