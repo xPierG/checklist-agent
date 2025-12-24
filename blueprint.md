@@ -119,7 +119,7 @@ The application uses a main tabbed interface to separate distinct workflows, bui
 
 ### **Typography**
 - **Font**: The application uses the **Inter** font, served from Google Fonts.
-- **Implementation**: The font is loaded and applied globally via the `assets/style.css` file to ensure a consistent, modern, and highly readable interface suitable for enterprise use.
+- **Implementation**: The font is loaded via the `assets/style.css` file. It is applied specifically to the main application container (`[data-testid="stAppViewContainer"]`) to ensure a consistent, modern look without interfering with the native styles of the Streamlit sidebar (like its icons).
 
 ### **Sidebar (Left)**
 - **Project Controls**:

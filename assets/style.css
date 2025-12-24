@@ -1,5 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
 
-html, body, [class*="st-emotion-cache"] {
+/* Apply the font ONLY to the main app container to avoid breaking sidebar icons and styles */
+[data-testid="stAppViewContainer"] {
     font-family: 'Inter', sans-serif;
 }
