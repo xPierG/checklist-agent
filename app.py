@@ -176,10 +176,9 @@ def mostra_interfaccia_principal():
             completed = len(df[df['Status'].isin(['APPROVED', 'REJECTED'])])
             completion_rate = (completed / total_items * 100) if total_items > 0 else 0
             
-            sac.Tag(label=f"{completion_rate:.1f}% Complete", color='blue', bordered=False) # Changed sac.chip to sac.tag and removed icon/variant
+            sac.Tag(label=f"{completion_rate:.1f}% Complete", color='blue', bordered=False)
             st.progress(completion_rate / 100)
             
-            # Replaced sac.grid(sac.card) with st.columns(st.metric) as sac.card is not available
             m_col1, m_col2, m_col3, m_col4, m_col5 = st.columns(5)
             m_col1.metric("Total Items", total_items)
             m_col2.metric("Pending", len(df[df['Status'] == 'PENDING']))
@@ -234,71 +233,69 @@ def mostra_interfaccia_principal():
                     if idx in st.session_state.checklist_df.index:
                         st.session_state.checklist_df.at[idx, 'Status'] = row['Status']
 
-    # --- TAB 2: ANALYZE & DISCUSS ---
+    # --- TAB 2: ANALYZE & DISCUSS (Refactored to single column) ---
     elif selected_tab == 'ANALYZE & DISCUSS':
         st.subheader("🔬 Analyze & Discuss")
         
-        col1, col2 = st.columns([1, 1], gap="large")
+        with st.container(border=True):
+            st.markdown("##### Select Row for Analysis")
+            row_to_analyze = st.selectbox(
+                "Select a row to focus on:",
+                df.index.tolist(),
+                format_func=lambda x: f"Row {x+1}: {service.get_question_from_row(x)[:60]}...",
+                key="individual_row_selector",
+                index=st.session_state.get('last_analyzed_row', 0)
+            )
 
-        with col1:
-            with st.container(border=True):
-                st.markdown("##### Select Row for Analysis")
-                row_to_analyze = st.selectbox(
-                    "Select a row to focus on:",
-                    df.index.tolist(),
-                    format_func=lambda x: f"Row {x+1}: {service.get_question_from_row(x)[:60]}...",
-                    key="individual_row_selector",
-                    index=st.session_state.get('last_analyzed_row', 0)
-                )
-
-                if st.button("Analyze Row", type="primary", key="analyze_individual", use_container_width=True):
-                    question = service.get_question_from_row(row_to_analyze)
-                    with st.status(f"🔄 Analyzing Row {row_to_analyze}...", expanded=True) as status:
-                        service.analyze_row(row_to_analyze, question)
-                        status.update(label="✅ Analysis Complete!", state="complete")
-                    st.session_state.checklist_df = service.get_dataframe()
-                    st.session_state.last_analyzed_row = row_to_analyze
-                    st.rerun()
-
-            with st.container(border=True):
-                st.markdown("##### Analysis Result")
-                row_data = df.loc[row_to_analyze]
+            if st.button("Analyze Row", type="primary", key="analyze_individual", use_container_width=True):
                 question = service.get_question_from_row(row_to_analyze)
-                desc = service.get_description_from_row(row_to_analyze)
-                
-                st.markdown(f"**Question:** {question}")
-                if desc:
-                    st.caption(f"**Description:** {desc}")
-                
-                sac.divider()
-                
-                res_col1, res_col2 = st.columns(2)
-                res_col1.metric("AI Answer", row_data.get('Risposta', 'N/A'))
-                res_col2.metric("Confidence", f"{row_data.get('Confidenza', 0)}%")
+                with st.status(f"🔄 Analyzing Row {row_to_analyze}...", expanded=True) as status:
+                    service.analyze_row(row_to_analyze, question)
+                    status.update(label="✅ Analysis Complete!", state="complete")
+                st.session_state.checklist_df = service.get_dataframe()
+                st.session_state.last_analyzed_row = row_to_analyze
+                st.rerun()
 
-                st.markdown("**Justification:**")
-                st.markdown(row_data.get('Giustificazione', 'Not yet analyzed.'))
+        with st.container(border=True):
+            st.markdown("##### Analysis Result")
+            row_data = df.loc[row_to_analyze]
+            question = service.get_question_from_row(row_to_analyze)
+            desc = service.get_description_from_row(row_to_analyze)
+            
+            st.markdown(f"**Question:** {question}")
+            if desc:
+                st.caption(f"**Description:** {desc}")
+            
+            sac.divider()
+            
+            # FIX: Use st.markdown for AI Answer to prevent text cutoff
+            st.markdown(f"**AI Answer:** {row_data.get('Risposta', 'N/A')}")
+            
+            # Keep confidence as a metric, it's a number
+            st.metric("Confidence", f"{row_data.get('Confidenza', 0)}%")
 
-        with col2:
-            with st.container(border=True):
-                st.markdown("##### Chat about this Row")
-                st.caption(f"Discussing: {service.get_question_from_row(row_to_analyze)[:80]}...")
+            st.markdown("**Justification:**")
+            st.markdown(row_data.get('Giustificazione', 'Not yet analyzed.'))
 
-                chat_key = f"chat_history_{row_to_analyze}"
-                if chat_key not in st.session_state:
-                    st.session_state[chat_key] = []
+        with st.container(border=True):
+            st.markdown("##### Chat about this Row")
+            st.caption(f"Discussing: {service.get_question_from_row(row_to_analyze)[:80]}...")
 
-                with st.container(height=450):
-                    for msg in st.session_state[chat_key]:
-                        with st.chat_message(msg["role"]):
-                            st.write(msg["content"])
-                
-                if prompt := st.chat_input("Ask a follow-up question..."):
-                    st.session_state[chat_key].append({"role": "user", "content": prompt})
-                    with st.spinner("Thinking..."):
-                        response = service.chat_with_row(row_to_analyze, prompt)
-                    st.session_state[chat_key].append({"role": "assistant", "content": response})
-                    st.rerun()
+            chat_key = f"chat_history_{row_to_analyze}"
+            if chat_key not in st.session_state:
+                st.session_state[chat_key] = []
+
+            with st.container(height=300):
+                for msg in st.session_state[chat_key]:
+                    with st.chat_message(msg["role"]):
+                        st.write(msg["content"])
+            
+            if prompt := st.chat_input("Ask a follow-up question..."):
+                st.session_state[chat_key].append({"role": "user", "content": prompt})
+                with st.spinner("Thinking..."):
+                    response = service.chat_with_row(row_to_analyze, prompt)
+                st.session_state[chat_key].append({"role": "assistant", "content": response})
+                st.rerun()
 
     # --- TAB 3: BATCH ANALYSIS ---
     elif selected_tab == 'BATCH ANALYSIS':
