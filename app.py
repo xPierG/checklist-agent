@@ -170,22 +170,23 @@ def mostra_interfaccia_principale():
     # --- TAB 1: DASHBOARD ---
     if selected_tab == 'DASHBOARD':
         
-        st.subheader("📊 Progress Overview")
-        total_items = len(df)
-        completed = len(df[df['Status'].isin(['APPROVED', 'REJECTED'])])
-        completion_rate = (completed / total_items * 100) if total_items > 0 else 0
-        
-        sac.chip(label=f"{completion_rate:.1f}% Complete", icon='award', variant='light')
-        st.progress(completion_rate / 100)
-        
-        sac.grid([
-            sac.grid.Col(sac.card(title='Total Items', content=total_items, icon='list-task')),
-            sac.grid.Col(sac.card(title='Pending', content=len(df[df['Status'] == 'PENDING']), icon='hourglass-split')),
-            sac.grid.Col(sac.card(title='Draft', content=len(df[df['Status'] == 'DRAFT']), icon='pencil-square')),
-            sac.grid.Col(sac.card(title='Approved', content=len(df[df['Status'] == 'APPROVED']), icon='check-circle')),
-            sac.grid.Col(sac.card(title='Rejected', content=len(df[df['Status'] == 'REJECTED']), icon='x-circle')),
-        ], grow=True)
-        
+        with st.container(border=True):
+            st.subheader("📊 Progress Overview")
+            total_items = len(df)
+            completed = len(df[df['Status'].isin(['APPROVED', 'REJECTED'])])
+            completion_rate = (completed / total_items * 100) if total_items > 0 else 0
+            
+            sac.chip(label=f"{completion_rate:.1f}% Complete", variant='light')
+            st.progress(completion_rate / 100)
+            
+            # Use st.metric for cards as sac.card is not available
+            m_col1, m_col2, m_col3, m_col4, m_col5 = st.columns(5)
+            m_col1.metric("Total Items", total_items)
+            m_col2.metric("Pending", len(df[df['Status'] == 'PENDING']))
+            m_col3.metric("Draft", len(df[df['Status'] == 'DRAFT']))
+            m_col4.metric("Approved", len(df[df['Status'] == 'APPROVED']))
+            m_col5.metric("Rejected", len(df[df['Status'] == 'REJECTED']))
+
         st.subheader("📋 Checklist")
         filter_selection = sac.segmented(
             items=["All", "Pending", "Draft", "Approved", "Rejected"],
@@ -240,70 +241,70 @@ def mostra_interfaccia_principale():
         col1, col2 = st.columns([1, 1], gap="large")
 
         with col1:
-            st.markdown("##### Select Row for Analysis")
-            row_to_analyze = st.selectbox(
-                "Select a row to focus on:",
-                df.index.tolist(),
-                format_func=lambda x: f"Row {x+1}: {service.get_question_from_row(x)[:60]}...",
-                key="individual_row_selector",
-                index=st.session_state.get('last_analyzed_row', 0)
-            )
+            with st.container(border=True):
+                st.markdown("##### Select Row for Analysis")
+                row_to_analyze = st.selectbox(
+                    "Select a row to focus on:",
+                    df.index.tolist(),
+                    format_func=lambda x: f"Row {x+1}: {service.get_question_from_row(x)[:60]}...",
+                    key="individual_row_selector",
+                    index=st.session_state.get('last_analyzed_row', 0)
+                )
 
-            if sac.button("Analyze Row", type="primary", key="analyze_individual", full_width=True):
+                if st.button("Analyze Row", type="primary", key="analyze_individual", use_container_width=True):
+                    question = service.get_question_from_row(row_to_analyze)
+                    with st.status(f"🔄 Analyzing Row {row_to_analyze}...", expanded=True) as status:
+                        service.analyze_row(row_to_analyze, question)
+                        status.update(label="✅ Analysis Complete!", state="complete")
+                    st.session_state.checklist_df = service.get_dataframe()
+                    st.session_state.last_analyzed_row = row_to_analyze
+                    st.rerun()
+
+            with st.container(border=True):
+                st.markdown("##### Analysis Result")
+                row_data = df.loc[row_to_analyze]
                 question = service.get_question_from_row(row_to_analyze)
-                with st.status(f"🔄 Analyzing Row {row_to_analyze}...", expanded=True) as status:
-                    service.analyze_row(row_to_analyze, question)
-                    status.update(label="✅ Analysis Complete!", state="complete")
-                st.session_state.checklist_df = service.get_dataframe()
-                st.session_state.last_analyzed_row = row_to_analyze
-                st.rerun()
-
-            st.markdown("---")
-            st.markdown("##### Analysis Result")
-            
-            row_data = df.loc[row_to_analyze]
-            question = service.get_question_from_row(row_to_analyze)
-            desc = service.get_description_from_row(row_to_analyze)
-            
-            with sac.card(title=f"📝 Details for Row #{row_to_analyze + 1}", icon='search', padding=20):
+                desc = service.get_description_from_row(row_to_analyze)
+                
                 st.markdown(f"**Question:** {question}")
                 if desc:
                     st.caption(f"**Description:** {desc}")
                 
                 sac.divider(dashed=True)
                 
-                sac.grid([
-                    sac.grid.Col(f"**AI Answer:** {row_data.get('Risposta', 'N/A')}", span=2),
-                    sac.grid.Col(f"**Confidence:** {row_data.get('Confidenza', 0)}%", span=1),
-                ], grow=True)
+                res_col1, res_col2 = st.columns(2)
+                res_col1.metric("AI Answer", row_data.get('Risposta', 'N/A'))
+                res_col2.metric("Confidence", f"{row_data.get('Confidenza', 0)}%")
 
                 st.markdown("**Justification:**")
                 st.markdown(row_data.get('Giustificazione', 'Not yet analyzed.'))
 
         with col2:
-            st.markdown("##### Chat about this Row")
-            st.caption(f"Discussing: {service.get_question_from_row(row_to_analyze)[:80]}...")
+            with st.container(border=True):
+                st.markdown("##### Chat about this Row")
+                st.caption(f"Discussing: {service.get_question_from_row(row_to_analyze)[:80]}...")
 
-            chat_key = f"chat_history_{row_to_analyze}"
-            if chat_key not in st.session_state:
-                st.session_state[chat_key] = []
+                chat_key = f"chat_history_{row_to_analyze}"
+                if chat_key not in st.session_state:
+                    st.session_state[chat_key] = []
 
-            with st.container(height=450):
-                for msg in st.session_state[chat_key]:
-                    with st.chat_message(msg["role"]):
-                        st.write(msg["content"])
-            
-            if prompt := st.chat_input("Ask a follow-up question..."):
-                st.session_state[chat_key].append({"role": "user", "content": prompt})
-                with st.spinner("Thinking..."):
-                    response = service.chat_with_row(row_to_analyze, prompt)
-                st.session_state[chat_key].append({"role": "assistant", "content": response})
-                st.rerun()
+                with st.container(height=450):
+                    for msg in st.session_state[chat_key]:
+                        with st.chat_message(msg["role"]):
+                            st.write(msg["content"])
+                
+                if prompt := st.chat_input("Ask a follow-up question..."):
+                    st.session_state[chat_key].append({"role": "user", "content": prompt})
+                    with st.spinner("Thinking..."):
+                        response = service.chat_with_row(row_to_analyze, prompt)
+                    st.session_state[chat_key].append({"role": "assistant", "content": response})
+                    st.rerun()
 
     # --- TAB 3: BATCH ANALYSIS ---
     elif selected_tab == 'BATCH ANALYSIS':
         st.subheader("🚀 Batch Analysis")
-        with sac.card(title="Batch Processing Options", icon='gear', padding=20):
+        with st.container(border=True):
+            st.markdown("##### Batch Processing Options")
             batch_mode = sac.segmented(
                 items=["All Pending", "Range", "Specific Rows"],
                 align='center'
@@ -333,7 +334,7 @@ def mostra_interfaccia_principale():
                     except:
                         st.error("Invalid format. Use comma-separated numbers.")
 
-            if sac.button("▶️ Start Batch", disabled=not rows_to_process, type='primary', full_width=True):
+            if st.button("▶️ Start Batch", disabled=not rows_to_process, type='primary', use_container_width=True):
                 with st.status("🚀 Starting batch analysis...", expanded=True) as status:
                     progress_bar = st.progress(0)
                     total = len(rows_to_process)
@@ -357,15 +358,15 @@ def mostra_interfaccia_principale():
         if not activities:
             st.info("No activities logged yet.")
         else:
-            for act in activities:
+            for i, act in enumerate(activities):
                 if act['level'] == 'SUCCESS':
-                    sac.alert(label=f"**{act['message']}**", description=act.get('details'), icon='check-circle', color='green', closable=True)
+                    sac.alert(label=f"**{act['message']}**", description=act.get('details'), icon=True, color='green', closable=True, key=f"log_{i}")
                 elif act['level'] == 'ERROR':
-                    sac.alert(label=f"**{act['message']}**", description=act.get('details'), icon='exclamation-circle', color='red', closable=True)
+                    sac.alert(label=f"**{act['message']}**", description=act.get('details'), icon=True, color='red', closable=True, key=f"log_{i}")
                 elif act['level'] == 'WARNING':
-                    sac.alert(label=f"**{act['message']}**", description=act.get('details'), icon='exclamation-triangle', color='yellow', closable=True)
+                    sac.alert(label=f"**{act['message']}**", description=act.get('details'), icon=True, color='yellow', closable=True, key=f"log_{i}")
                 else: # INFO
-                    sac.alert(label=f"**{act['message']}**", description=act.get('details'), icon='info-circle', color='blue', closable=True)
+                    sac.alert(label=f"**{act['message']}**", description=act.get('details'), icon=True, color='blue', closable=True, key=f"log_{i}")
 
 def mostra_wizard():
     """
