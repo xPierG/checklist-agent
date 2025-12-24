@@ -176,7 +176,7 @@ def mostra_interfaccia_principal():
             completed = len(df[df['Status'].isin(['APPROVED', 'REJECTED'])])
             completion_rate = (completed / total_items * 100) if total_items > 0 else 0
             
-            sac.tag(label=f"{completion_rate:.1f}% Complete", color='blue') # Changed sac.chip to sac.tag and removed icon/variant
+            sac.Tag(label=f"{completion_rate:.1f}% Complete", color='blue', bordered=False) # Changed sac.chip to sac.tag and removed icon/variant
             st.progress(completion_rate / 100)
             
             # Replaced sac.grid(sac.card) with st.columns(st.metric) as sac.card is not available
