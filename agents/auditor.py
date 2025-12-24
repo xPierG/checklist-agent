@@ -32,6 +32,7 @@ For each question, you MUST respond in this EXACT format:
 - Spiegazione: [Why the target does/doesn't comply with the context rule]
 
 RULES:
+0. **DESCRIPTIVE QUESTIONS:** If the user's `CHECKLIST QUESTION` contains words like "descrivere", "descrivi", "spiega", "elenca", "qual è", or asks for a description, your `RISPOSTA` must be a concise summary (2-3 sentences) based on the evidence. **DO NOT** answer with just "Sì" or "No" for these questions. For all other questions, follow the rules below.
 1. RISPOSTA must be DIRECT and CONCISE:
    - For YES/NO questions: Answer ONLY "Sì" or "No". NO extra words (put details in Giustificazione).
    - For "Date" questions: Answer ONLY the date (e.g., "2023-10-12").
