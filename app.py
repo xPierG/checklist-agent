@@ -268,12 +268,8 @@ def mostra_interfaccia_principal():
             
             sac.divider()
             
-            # FIX: Use st.markdown for AI Answer to prevent text cutoff
             st.markdown(f"**AI Answer:** {row_data.get('Risposta', 'N/A')}")
-            
-            # Keep confidence as a metric, it's a number
             st.metric("Confidence", f"{row_data.get('Confidenza', 0)}%")
-
             st.markdown("**Justification:**")
             st.markdown(row_data.get('Giustificazione', 'Not yet analyzed.'))
 
@@ -314,22 +310,28 @@ def mostra_interfaccia_principal():
                 rows_to_process = pending_rows
             elif batch_mode == "Range":
                 col_r1, col_r2 = st.columns(2)
-                start_row = col_r1.number_input("From row:", min_value=0, max_value=len(df)-1, value=0)
-                end_row = col_r2.number_input("To row:", min_value=0, max_value=len(df)-1, value=min(2, len(df)-1))
-                if start_row <= end_row:
+                # FIX: Change to 1-based indexing for user
+                start_row_input = col_r1.number_input("From row:", min_value=1, max_value=len(df), value=1)
+                end_row_input = col_r2.number_input("To row:", min_value=1, max_value=len(df), value=min(3, len(df)))
+                
+                if start_row_input <= end_row_input:
+                    # Convert back to 0-based index for internal use
+                    start_row = start_row_input - 1
+                    end_row = end_row_input - 1
                     rows_to_process = list(range(start_row, end_row + 1))
-                    st.info(f"Will analyze rows {start_row} to {end_row} ({len(rows_to_process)} rows).")
+                    st.info(f"Will analyze rows {start_row_input} to {end_row_input} ({len(rows_to_process)} rows).")
                 else:
                     st.error("Start row must be <= End row.")
             else: # Specific Rows
-                row_input = st.text_input("Enter row numbers (comma-separated):", placeholder="e.g., 0, 2, 5, 7")
+                row_input = st.text_input("Enter row numbers (comma-separated):", placeholder="e.g., 1, 3, 6, 8")
                 if row_input:
                     try:
-                        rows_to_process = [int(r.strip()) for r in row_input.split(',')]
+                        # Convert 1-based input to 0-based index
+                        rows_to_process = [int(r.strip()) - 1 for r in row_input.split(',')]
                         rows_to_process = [r for r in rows_to_process if 0 <= r < len(df)]
-                        st.info(f"Will analyze {len(rows_to_process)} rows: {rows_to_process}")
+                        st.info(f"Will analyze {len(rows_to_process)} rows: {[r + 1 for r in rows_to_process]}")
                     except:
-                        st.error("Invalid format. Use comma-separated numbers.")
+                        st.error("Invalid format. Use comma-separated numbers (e.g., 1, 3, 6).")
 
             if st.button("▶️ Start Batch", disabled=not rows_to_process, type='primary', use_container_width=True):
                 with st.status("🚀 Starting batch analysis...", expanded=True) as status:
@@ -337,7 +339,7 @@ def mostra_interfaccia_principal():
                     total = len(rows_to_process)
                     for i, idx in enumerate(rows_to_process, 1):
                         question = service.get_question_from_row(idx)
-                        status.update(label=f"🔄 Analyzing row {idx}/{len(df)}: {question[:50]}...")
+                        status.update(label=f"🔄 Analyzing row {idx + 1}/{len(df)}: {question[:50]}...")
                         service.analyze_row(idx, question)
                         progress_bar.progress(i / total)
                         if i < total: time.sleep(1) # Small delay
@@ -345,9 +347,7 @@ def mostra_interfaccia_principal():
                     sac.alert(
                         label="Batch Analysis Completed!",
                         description="Please navigate to the **DASHBOARD** tab to review the updated checklist and results.",
-                        type='info',
-                        showIcon=True,
-                        closable=False,
+                        closable=True,
                         key="batch_complete_alert"
                     )
                 st.session_state.checklist_df = service.get_dataframe()
@@ -364,17 +364,16 @@ def mostra_interfaccia_principal():
             st.info("No activities logged yet.")
         else:
             for i, act in enumerate(activities):
-                log_type = act['level'].lower()
-                if log_type == 'success':
-                    alert_type = 'success'
-                elif log_type == 'error':
-                    alert_type = 'error'
-                elif log_type == 'warning':
-                    alert_type = 'warning'
-                else: # info
-                    alert_type = 'info'
+                if act['level'] == 'SUCCESS':
+                    color = 'green'
+                elif act['level'] == 'ERROR':
+                    color = 'red'
+                elif act['level'] == 'WARNING':
+                    color = 'yellow'
+                else: # INFO
+                    color = 'blue'
                 
-                sac.alert(label=f"**{act['message']}**", description=act.get('details'), showIcon=True, type=alert_type, closable=True, key=f"log_{i}")
+                sac.alert(label=f"**{act['message']}**", description=act.get('details'), color=color, closable=True, key=f"log_{i}")
 
 def mostra_wizard():
     """
