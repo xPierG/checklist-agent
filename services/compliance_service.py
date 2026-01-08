@@ -110,7 +110,7 @@ class ComplianceService:
         self.checklist_df = self.checklist_df.replace("nan", "")
         
         # Detect ID column (case-insensitive)
-        id_patterns = ['id', 'item_id', 'item id', 'number', 'no', '#']
+        id_patterns = ['id', 'item_id', 'item id', 'number', 'no', '#', 'item_no']
         id_col = None
         for col in self.checklist_df.columns:
             if col.lower().strip() in id_patterns:
