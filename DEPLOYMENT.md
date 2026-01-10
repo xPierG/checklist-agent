@@ -65,7 +65,7 @@ docker push europe-west1-docker.pkg.dev/<REDACTED_PROJECT_ID>/checklist-agent-re
 
 Esegui il deploy della nuova immagine su Cloud Run. Questo comando può essere lanciato dalla tua macchina locale o da Cloud Shell.
 
-**Nota:** Ricorda di sostituire `[YOUR_GENERATIVE_MODEL]` con il nome effettivo del modello che intendi utilizzare (es. `gemini-1.5-pro-preview-0409`).
+
 
 ```bash
 gcloud run deploy checklist-agent \
@@ -76,6 +76,5 @@ gcloud run deploy checklist-agent \
   --set-env-vars="AUTH_MODE=ADC" \
   --set-env-vars="GCP_PROJECT_ID=<REDACTED_PROJECT_ID>" \
   --set-env-vars="GCP_REGION=europe-west1" \
-  --set-env-vars="GCP_GENERATIVE_MODEL=[YOUR_GENERATIVE_MODEL]" \
   --platform=managed
 ```
