@@ -3,13 +3,19 @@ import os
 import hashlib
 from unittest.mock import patch, MagicMock
 from utils.logger import AppLogger, logger # Import both for singleton test
-from utils.pdf_loader import PDFLoader
+from utils.document_loader import DocumentLoaderFactory, PDFLoader, BaseDocumentLoader, DocxLoader, TextLoader
 from google.genai import Client, types
 
 # Mock for google.genai.types.File
 class MockFile:
     def __init__(self, name):
         self.name = name
+
+# Concrete implementation for testing BaseDocumentLoader methods
+class ConcreteDocumentLoader(BaseDocumentLoader):
+    def load_document(self, file_path: str, display_name: str = None) -> str:
+        # Dummy implementation for testing purposes
+        return "mock_uri_for_" + os.path.basename(file_path)
 
 class TestAppLogger(unittest.TestCase):
     
@@ -78,72 +84,66 @@ class TestAppLogger(unittest.TestCase):
         self.assertEqual(self.logger_instance.activity_log[0]['level'], "ERROR")
 
 
-class TestPDFLoader(unittest.TestCase):
+class TestDocumentLoaders(unittest.TestCase):
 
     def setUp(self):
         self.mock_client = MagicMock(spec=Client)
-        self.pdf_loader = PDFLoader(self.mock_client)
+        self.factory = DocumentLoaderFactory(self.mock_client)
+        self.pdf_loader = self.factory.get_loader("dummy.pdf") # Get a PDFLoader instance
         
         # Ensure a clean cache for each test
         self.pdf_loader.uri_cache = {}
-
+        
         # Create a dummy PDF file for testing
         self.dummy_pdf_path = "test_dummy.pdf"
+        self.dummy_pdf_content = b"%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\nxref\n0 1\n0000000000 65535 f\ntrailer<</Size 1/Root 1 0 R>>startxref\n0\n%%EOF"
         with open(self.dummy_pdf_path, "wb") as f:
-            f.write(b"%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\nxref\n0 1\n0000000000 65535 f\ntrailer<</Size 1/Root 1 0 R>>startxref\n0\n%%EOF")
+            f.write(self.dummy_pdf_content)
 
     def tearDown(self):
         if os.path.exists(self.dummy_pdf_path):
             os.remove(self.dummy_pdf_path)
-        # Clean up any created cache files (though not expected for this mock test)
-        if os.path.exists(self.pdf_loader.cache_dir):
+        # Clean up any created cache files and directory
+        if os.path.exists(ConcreteDocumentLoader(self.mock_client).cache_dir): # Use ConcreteDocumentLoader to get cache_dir
             import shutil
-            shutil.rmtree(self.pdf_loader.cache_dir)
+            shutil.rmtree(ConcreteDocumentLoader(self.mock_client).cache_dir)
 
     def test_calculate_hash(self):
-        hash1 = self.pdf_loader._calculate_hash(self.dummy_pdf_path)
-        with open(self.dummy_pdf_path, "wb") as f:
-            f.write(b"some other content")
-        hash2 = self.pdf_loader._calculate_hash(self.dummy_pdf_path)
+        loader_instance = ConcreteDocumentLoader(self.mock_client) # Use concrete class for hash test
+        hash1 = loader_instance._calculate_hash(self.dummy_pdf_content)
+        
+        content2 = b"some other content"
+        hash2 = loader_instance._calculate_hash(content2)
         self.assertNotEqual(hash1, hash2)
         
-        with open(self.dummy_pdf_path, "wb") as f:
-            f.write(b"%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\nxref\n0 1\n0000000000 65535 f\ntrailer<</Size 1/Root 1 0 R>>startxref\n0\n%%EOF")
-        hash3 = self.pdf_loader._calculate_hash(self.dummy_pdf_path)
+        hash3 = loader_instance._calculate_hash(self.dummy_pdf_content)
         self.assertEqual(hash1, hash3)
 
     @patch('builtins.print')
-    def test_upload_and_cache_new_file(self, mock_print):
+    def test_pdf_loader_upload_and_cache_new_file(self, mock_print):
         mock_uploaded_file = MockFile(name="files/12345")
         self.mock_client.files.upload.return_value = mock_uploaded_file
 
-        uri = self.pdf_loader.upload_and_cache(self.dummy_pdf_path)
+        uri = self.pdf_loader.load_document(self.dummy_pdf_path)
 
         self.mock_client.files.upload.assert_called_once_with(file=self.dummy_pdf_path)
         self.assertEqual(uri, "files/12345")
-        self.assertIn(self.pdf_loader._calculate_hash(self.dummy_pdf_path), self.pdf_loader.uri_cache)
+        self.assertIn(self.pdf_loader._calculate_hash(self.dummy_pdf_content), self.pdf_loader.uri_cache)
 
     @patch('builtins.print')
-    def test_upload_and_cache_cached_file(self, mock_print):
+    def test_pdf_loader_upload_and_cache_cached_file(self, mock_print):
         mock_uploaded_file = MockFile(name="files/12345")
         
         # Pre-cache a file
-        file_hash = self.pdf_loader._calculate_hash(self.dummy_pdf_path)
+        file_hash = self.pdf_loader._calculate_hash(self.dummy_pdf_content)
         self.pdf_loader.uri_cache[file_hash] = "files/cached_uri"
 
-        uri = self.pdf_loader.upload_and_cache(self.dummy_pdf_path)
+        uri = self.pdf_loader.load_document(self.dummy_pdf_path)
 
         # Assert that client.files.upload was NOT called
         self.mock_client.files.upload.assert_not_called()
         self.assertEqual(uri, "files/cached_uri")
         self.assertIn(file_hash, self.pdf_loader.uri_cache)
-
-    def test_get_file_content(self):
-        content = self.pdf_loader.get_file_content(self.dummy_pdf_path)
-        with open(self.dummy_pdf_path, "rb") as f:
-            expected_content = f.read()
-        self.assertEqual(content, expected_content)
-
 
 if __name__ == '__main__':
     unittest.main()

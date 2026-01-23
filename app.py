@@ -42,11 +42,11 @@ def mostra_interfaccia_principal():
         st.title("🔍 Compliance Agent")
 
         # Quick Stats at top
-        if service.checklist_df is not None or service.context_pdf_uris or service.target_pdf_uris:
+        if service.checklist_df is not None or service.context_doc_info or service.target_doc_info:
             sac.divider(label='Stats', icon='bar-chart-2', align='center')
             col1, col2, col3 = st.columns(3)
-            col1.metric("📚", len(service.context_pdf_uris), "Rules")
-            col2.metric("📄", len(service.target_pdf_uris), "Content")
+            col1.metric("📚", len(service.context_doc_info), "Rules")
+            col2.metric("📄", len(service.target_doc_info), "Content")
             if service.checklist_df is not None:
                 pending = len(service.checklist_df[service.checklist_df['Status'] == 'PENDING'])
                 col3.metric("⏳", pending, "Pending")
@@ -55,53 +55,53 @@ def mostra_interfaccia_principal():
         
         sac.divider(label='Setup', icon='upload-cloud', align='center')
 
-        # CONTEXT PDFs - Regulations/Policies
+        # CONTEXT Documents - Regulations/Policies
         with st.expander("🏛️ Rules & Regulations", expanded=True):
-            uploaded_context_pdfs = st.file_uploader(
+            uploaded_context_files = st.file_uploader(
                 "Upload policies, standards, regulations",
-                type="pdf", accept_multiple_files=True, key="context_uploader"
+                type=["pdf", "docx", "txt"], accept_multiple_files=True, key="context_uploader"
             )
-            if uploaded_context_pdfs:
+            if uploaded_context_files:
                 if st.button("📤 Process Rules", width="stretch", key="process_context"):
-                    with st.spinner(f"Processing {len(uploaded_context_pdfs)} file(s)..."):
-                        for uploaded_pdf in uploaded_context_pdfs:
-                            temp_path = f"temp_{uploaded_pdf.name}"
+                    with st.spinner(f"Processing {len(uploaded_context_files)} file(s)..."):
+                        for uploaded_file in uploaded_context_files:
+                            temp_path = f"temp_{uploaded_file.name}"
                             with open(temp_path, "wb") as f:
-                                f.write(uploaded_pdf.getbuffer())
-                            service.load_context_pdf(temp_path)
+                                f.write(uploaded_file.getbuffer())
+                            service.load_context_document(temp_path)
                             os.remove(temp_path)
-                        st.toast(f'✅ Rules Loaded: {len(uploaded_context_pdfs)} files processed.')
+                        st.toast(f'✅ Rules Loaded: {len(uploaded_context_files)} files processed.')
 
-            if service.context_pdf_uris:
-                st.caption(f"**Active:** {len(service.context_pdf_uris)} files")
-                for doc_info in service.context_pdf_uris[:3]:
+            if service.context_doc_info:
+                st.caption(f"**Active:** {len(service.context_doc_info)} files")
+                for doc_info in service.context_doc_info[:3]:
                     st.caption(f"🟢 {doc_info['filename'][:25]}")
-                if len(service.context_pdf_uris) > 3:
-                    st.caption(f"... +{len(service.context_pdf_uris) - 3} more")
+                if len(service.context_doc_info) > 3:
+                    st.caption(f"... +{len(service.context_doc_info) - 3} more")
 
-        # TARGET PDFs - Documents to Analyze
+        # TARGET Documents - Documents to Analyze
         with st.expander("📄 Content to Analyze", expanded=True):
-            uploaded_target_pdfs = st.file_uploader(
+            uploaded_target_files = st.file_uploader(
                 "Upload documents to verify",
-                type="pdf", accept_multiple_files=True, key="target_uploader"
+                type=["pdf", "docx", "txt"], accept_multiple_files=True, key="target_uploader"
             )
-            if uploaded_target_pdfs:
+            if uploaded_target_files:
                 if st.button("📤 Process Content", width="stretch", key="process_target"):
-                    with st.spinner(f"Processing {len(uploaded_target_pdfs)} file(s)..."):
-                        for uploaded_pdf in uploaded_target_pdfs:
-                            temp_path = f"temp_{uploaded_pdf.name}"
+                    with st.spinner(f"Processing {len(uploaded_target_files)} file(s)..."):
+                        for uploaded_file in uploaded_target_files:
+                            temp_path = f"temp_{uploaded_file.name}"
                             with open(temp_path, "wb") as f:
-                                f.write(uploaded_pdf.getbuffer())
-                            service.load_target_pdf(temp_path)
+                                f.write(uploaded_file.getbuffer())
+                            service.load_target_document(temp_path)
                             os.remove(temp_path)
-                        st.toast(f'✅ Content Loaded: {len(uploaded_target_pdfs)} files processed.')
+                        st.toast(f'✅ Content Loaded: {len(uploaded_target_files)} files processed.')
 
-            if service.target_pdf_uris:
-                st.caption(f"**Active:** {len(service.target_pdf_uris)} files")
-                for doc_info in service.target_pdf_uris[:3]:
+            if service.target_doc_info:
+                st.caption(f"**Active:** {len(service.target_doc_info)} files")
+                for doc_info in service.target_doc_info[:3]:
                     st.caption(f"🟢 {doc_info['filename'][:25]}")
-                if len(service.target_pdf_uris) > 3:
-                    st.caption(f"... +{len(service.target_pdf_uris) - 3} more")
+                if len(service.target_doc_info) > 3:
+                    st.caption(f"... +{len(service.target_doc_info) - 3} more")
 
         # CHECKLIST
         with st.expander("📋 Checklist", expanded=True):
@@ -215,23 +215,32 @@ def mostra_interfaccia_principal():
             if q_c and q_c in display_df.columns: cols_to_show.append(q_c); col_config[q_c] = st.column_config.TextColumn("Question", width="medium")
             if d_c and d_c in display_df.columns: cols_to_show.append(d_c); col_config[d_c] = st.column_config.TextColumn("Description", width="medium", help="Additional details")
             
-            cols_to_show.extend(['Risposta', 'Confidenza', 'Giustificazione'])
+            cols_to_show.extend(['Risposta', 'Confidenza', 'Giustificazione', 'Manually_Edited'])
             col_config.update({
-                "Risposta": st.column_config.TextColumn("AI Answer", width="medium"),
+                "Risposta": st.column_config.TextColumn("AI Answer", width="medium", disabled=False), # Make editable
                 "Confidenza": st.column_config.ProgressColumn("Confidence", min_value=0, max_value=100, format="%d%%", width="small"),
-                "Giustificazione": st.column_config.TextColumn("Justification", width="large")
+                "Giustificazione": st.column_config.TextColumn("Justification", width="large", disabled=True), # Make read-only
+                "Manually_Edited": st.column_config.CheckboxColumn("Edited", width="small", disabled=True)
             })
             
             editor_df = display_df[cols_to_show].copy()
             edited_df = st.data_editor(
                 editor_df, width="stretch", num_rows="fixed", hide_index=True, column_config=col_config, height=500, key="checklist_editor",
-                disabled=[c for c in cols_to_show if c != 'Status']
             )
             
             if edited_df is not None:
                 for idx, row in edited_df.iterrows():
-                    if idx in st.session_state.checklist_df.index:
-                        st.session_state.checklist_df.at[idx, 'Status'] = row['Status']
+                    original_row_idx = display_df.index[idx] # Get original index from filtered df
+                    
+                    # Update Status if changed
+                    if st.session_state.checklist_df.at[original_row_idx, 'Status'] != row['Status']:
+                        st.session_state.checklist_df.at[original_row_idx, 'Status'] = row['Status']
+                        st.session_state.checklist_df.at[original_row_idx, 'Manually_Edited'] = True # Mark as edited
+                    
+                    # Update Risposta and track manual edits
+                    if st.session_state.checklist_df.at[original_row_idx, 'Risposta'] != row['Risposta']:
+                        st.session_state.checklist_df.at[original_row_idx, 'Risposta'] = row['Risposta']
+                        st.session_state.checklist_df.at[original_row_idx, 'Manually_Edited'] = True
 
     # --- TAB 2: ANALYZE & DISCUSS (Refactored to single column) ---
     elif selected_tab == 'ANALYZE & DISCUSS':
@@ -302,6 +311,16 @@ def mostra_interfaccia_principal():
                 items=["All Pending", "Range", "Specific Rows"],
                 align='center'
             )
+            
+            # Concurrency Slider
+            concurrency = st.slider(
+                "⚡ Parallel Threads (Concurrency)",
+                min_value=1,
+                max_value=10,
+                value=3,
+                help="Number of agents running in parallel. Higher values are faster but may hit API limits."
+            )
+
             rows_to_process = []
 
             if batch_mode == "All Pending":
@@ -334,24 +353,44 @@ def mostra_interfaccia_principal():
                         st.error("Invalid format. Use comma-separated numbers (e.g., 1, 3, 6).")
 
             if st.button("▶️ Start Batch", disabled=not rows_to_process, type='primary', use_container_width=True):
-                with st.status("🚀 Starting batch analysis...", expanded=True) as status:
+                # Use a unique key for the status container to avoid issues with reruns
+                status_key = f"batch_status_{time.time()}" 
+                with st.status(f"🚀 Starting parallel batch analysis ({len(rows_to_process)} items, {concurrency} threads)...", expanded=True) as status:
                     progress_bar = st.progress(0)
-                    total = len(rows_to_process)
-                    for i, idx in enumerate(rows_to_process, 1):
-                        question = service.get_question_from_row(idx)
-                        status.update(label=f"🔄 Analyzing row {idx + 1}/{len(df)}: {question[:50]}...")
-                        service.analyze_row(idx, question)
-                        progress_bar.progress(i / total)
-                        if i < total: time.sleep(1) # Small delay
-                    status.update(label=f"✅ Batch Complete! Analyzed {total} rows", state="complete")
-                    sac.alert(
-                        label="Batch Analysis Completed!",
-                        description="Please navigate to the **DASHBOARD** tab to review the updated checklist and results.",
-                        closable=True,
-                        key="batch_complete_alert"
-                    )
-                st.session_state.checklist_df = service.get_dataframe()
-                st.rerun()
+                    processed_count = 0
+                    total_to_process = len(rows_to_process)
+                    
+                    # Run the batch and iterate over yielded results
+                    for result in service.batch_analyze(row_indices=rows_to_process, concurrency=concurrency):
+                        if result["status"] == "success":
+                            processed_count += 1
+                            progress_bar.progress(processed_count / total_to_process)
+                            status.write(f"✅ Processed row {result['index'] + 1} (ID: {df.at[result['index'], service.id_column] if service.id_column else result['index']})")
+                        elif result["status"] == "error":
+                            processed_count += 1 # Count errors as processed for progress bar
+                            progress_bar.progress(processed_count / total_to_process)
+                            status.write(f"❌ Error processing row {result['index'] + 1}: {result['error']}")
+                            logger.error(f"Batch item error: {result['error']}")
+                        elif result["status"] == "info":
+                            status.write(f"ℹ️ {result['message']}")
+                        
+                    status.update(label=f"✅ Batch Complete! Processed {processed_count} items", state="complete")
+                        
+                    # After batch completion, refresh the dataframe and rerun
+                    st.session_state.checklist_df = service.get_dataframe()
+                    st.rerun() # Rerun to update dashboard
+
+        # The alert below will be shown only if st.rerun() is not called from inside the batch processing loop
+        # and batch_analysis_complete is set. Since we are calling rerun inside, this may not be strictly necessary,
+        # but good to keep as a fallback or for clarity if behavior changes.
+        if st.session_state.get('batch_analysis_complete', False):
+            sac.alert(
+                label="Batch Analysis Completed!",
+                description="Please navigate to the **DASHBOARD** tab to review the updated checklist and results.",
+                closable=True,
+                key="batch_complete_alert"
+            )
+            del st.session_state['batch_analysis_complete'] # Clear flag
 
     # --- TAB 4: ACTIVITY LOGS ---
     elif selected_tab == 'ACTIVITY LOGS':
@@ -416,51 +455,51 @@ def mostra_wizard():
     
     def wizard_step_2():
         st.title("Step 2: Upload Context (Rules) 🏛️")
-        st.info("Upload one or more PDF files containing the rules, regulations, and standards.")
-        uploaded_context_pdfs = st.file_uploader("Drag PDFs here", type="pdf", accept_multiple_files=True, key="wizard_context_uploader", label_visibility="collapsed")
-        if uploaded_context_pdfs:
-            with st.spinner(f"Processing {len(uploaded_context_pdfs)} context files..."):
-                for uploaded_pdf in uploaded_context_pdfs:
-                    temp_path = f"temp_{uploaded_pdf.name}"
-                    with open(temp_path, "wb") as f: f.write(uploaded_pdf.getbuffer())
-                    service.load_context_pdf(temp_path)
+        st.info("Upload one or more PDF, DOCX, or TXT files containing the rules, regulations, and standards.")
+        uploaded_context_files = st.file_uploader("Drag files here", type=["pdf", "docx", "txt"], accept_multiple_files=True, key="wizard_context_uploader", label_visibility="collapsed")
+        if uploaded_context_files:
+            with st.spinner(f"Processing {len(uploaded_context_files)} context files..."):
+                for uploaded_file in uploaded_context_files:
+                    temp_path = f"temp_{uploaded_file.name}"
+                    with open(temp_path, "wb") as f: f.write(uploaded_file.getbuffer())
+                    service.load_context_document(temp_path)
                     os.remove(temp_path)
-                st.success(f"✅ {len(service.context_pdf_uris)} context files uploaded and processed.")
-        if service.context_pdf_uris:
+                st.success(f"✅ {len(service.context_doc_info)} context files uploaded and processed.")
+        if service.context_doc_info:
             st.write("Uploaded context files:")
-            for doc_info in service.context_pdf_uris: st.caption(f"✓ {doc_info['filename']}")
+            for doc_info in service.context_doc_info: st.caption(f"✓ {doc_info['filename']}")
         col1, col2, col3 = st.columns([1, 1, 1])
         with col1:
             if st.button("← Back"):
                 st.session_state.wizard_step = 1
                 st.rerun()
         with col3:
-            if st.button("Next →", type="primary", disabled=(len(service.context_pdf_uris) == 0)):
+            if st.button("Next →", type="primary", disabled=(len(service.context_doc_info) == 0)):
                 st.session_state.wizard_step = 3
                 st.rerun()
 
     def wizard_step_3():
         st.title("Step 3: Upload Target (Content) 📄")
-        st.info("Upload one or more PDF files to be analyzed for compliance verification.")
-        uploaded_target_pdfs = st.file_uploader("Drag PDFs here", type="pdf", accept_multiple_files=True, key="wizard_target_uploader", label_visibility="collapsed")
-        if uploaded_target_pdfs:
-            with st.spinner(f"Processing {len(uploaded_target_pdfs)} target files..."):
-                for uploaded_pdf in uploaded_target_pdfs:
-                    temp_path = f"temp_{uploaded_pdf.name}"
-                    with open(temp_path, "wb") as f: f.write(uploaded_pdf.getbuffer())
-                    service.load_target_pdf(temp_path)
+        st.info("Upload one or more PDF, DOCX, or TXT files to be analyzed for compliance verification.")
+        uploaded_target_files = st.file_uploader("Drag files here", type=["pdf", "docx", "txt"], accept_multiple_files=True, key="wizard_target_uploader", label_visibility="collapsed")
+        if uploaded_target_files:
+            with st.spinner(f"Processing {len(uploaded_target_files)} target files..."):
+                for uploaded_file in uploaded_target_files:
+                    temp_path = f"temp_{uploaded_file.name}"
+                    with open(temp_path, "wb") as f: f.write(uploaded_file.getbuffer())
+                    service.load_target_document(temp_path)
                     os.remove(temp_path)
-                st.success(f"✅ {len(service.target_pdf_uris)} target files uploaded and processed.")
-        if service.target_pdf_uris:
+                st.success(f"✅ {len(service.target_doc_info)} target files uploaded and processed.")
+        if service.target_doc_info:
             st.write("Uploaded target files:")
-            for doc_info in service.target_pdf_uris: st.caption(f"✓ {doc_info['filename']}")
+            for doc_info in service.target_doc_info: st.caption(f"✓ {doc_info['filename']}")
         col1, col2, col3 = st.columns([1, 1, 1])
         with col1:
             if st.button("← Back"):
                 st.session_state.wizard_step = 2
                 st.rerun()
         with col3:
-            if st.button("✨ Finish", type="primary", disabled=(len(service.target_pdf_uris) == 0)):
+            if st.button("✨ Finish", type="primary", disabled=(len(service.target_doc_info) == 0)):
                 st.session_state.wizard_mode = False
                 st.success("🎉 Setup complete! Redirecting to the main interface...")
                 time.sleep(1)

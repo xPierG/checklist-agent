@@ -46,10 +46,12 @@ Updated Checklist with AI Insights
     -   Confidence score (0-100%)
     -   Justification with text snippets from both context and target documents
 -   **Flexible Column Detection**: Auto-detects ID, Question, and **Description** columns
--   **Batch Processing**: Analyze multiple items at once
+-   **Interactive Batch Analysis**: Analyze multiple items with real-time progress, skipping already processed items.
+-   **Editable Results Table**: Manually modify AI-generated answers and justifications.
+-   **Manual Edit Tracking**: Automatically flags items that have been manually edited by the user.
 -   **Interactive Chat**: Discuss specific checklist items with the AI
 -   **Real-time Logging**: Activity monitor shows what the agent is doing
--   **Multi-PDF Support**: Upload multiple context and target documents
+-   **Multi-Document Support**: Upload multiple context and target documents (PDF, DOCX, TXT)
 
 ## Prerequisites
 
@@ -105,12 +107,12 @@ streamlit run app.py
 ### 2. Upload Documents
 
 **Context Documents (Optional but Recommended)**:
--   Upload regulations, policies, or standards that define the rules
--   Example: GDPR regulation PDF, ISO 27001 standard
+-   Upload regulations, policies, or standards that define the rules (PDF, DOCX, TXT)
+-   Example: GDPR regulation PDF, ISO 27001 standard, Internal Policy.docx, ComplianceGuide.txt
 
 **Target Documents (Required)**:
--   Upload the documents you want to verify
--   Example: Company privacy manual, security procedures
+-   Upload the documents you want to verify (PDF, DOCX, TXT)
+-   Example: Company privacy manual.pdf, security procedures.docx, architecture.txt
 
 **Checklist (Required)**:
 -   Upload Excel/CSV file with your questions
@@ -160,7 +162,7 @@ The AI generates for each question:
 -   **Data**: Pandas for checklist management
 -   **Logging**: Custom logger with file and activity tracking
 
-## Project Structure
+### Project Structure
 
 ```
 checklist-agent/
@@ -171,7 +173,7 @@ checklist-agent/
 ├── services/
 │   └── compliance_service.py  # Core business logic
 ├── utils/
-│   ├── pdf_loader.py      # PDF upload handling
+│   ├── document_loader.py # Handles loading and uploading various document types (PDF, DOCX, TXT)
 │   └── logger.py          # Logging system
 ├── app.py                 # Streamlit UI
 ├── requirements.txt       # Dependencies

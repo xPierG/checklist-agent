@@ -54,18 +54,20 @@ class TestComplianceServiceIntegration(unittest.TestCase):
             'Question': ['Is X compliant?', 'Is Y compliant?'],
             'Description': ['Details for X', 'Details for Y'],
             'Risposta': ['?', '?'],
+            'Original_Risposta': ['?', '?'], # New column
             'Confidenza': [0, 0],
             'Giustificazione': ['', ''],
             'Status': ['PENDING', 'PENDING'],
+            'Manually_Edited': [False, False], # New column
             'Discussion_Log': ['', '']
         })
         self.service.id_column = 'ID'
         self.service.question_column = 'Question'
         self.service.description_column = 'Description'
 
-        # Dummy PDFs
-        self.service.context_pdf_uris = [{'filename': 'context.pdf', 'uri': 'files/context_uri'}]
-        self.service.target_pdf_uris = [{'filename': 'target.pdf', 'uri': 'files/target_uri'}]
+        # Dummy Documents
+        self.service.context_doc_info = [{'filename': 'context.pdf', 'uri': 'files/context_uri'}]
+        self.service.target_doc_info = [{'filename': 'target.pdf', 'uri': 'files/target_uri'}]
 
     def tearDown(self):
         self.patcher_env.stop()
@@ -106,19 +108,21 @@ class TestComplianceServiceIntegration(unittest.TestCase):
         result = self.service.analyze_row(row_index, question)
 
         self.mock_runner_instance.run.assert_called_once()
-        self.assertIn("RISPOSTA", result) # Raw response text is returned
+        self.assertIn("Compliance found.", result) # Raw response text is returned (justification)
 
         # Verify DataFrame update
         self.assertEqual(self.service.checklist_df.at[row_index, 'Risposta'], 'Sì')
+        self.assertEqual(self.service.checklist_df.at[row_index, 'Original_Risposta'], 'Sì') # New assertion
         self.assertEqual(self.service.checklist_df.at[row_index, 'Confidenza'], 90)
         self.assertEqual(self.service.checklist_df.at[row_index, 'Giustificazione'], 'Compliance found.')
         self.assertEqual(self.service.checklist_df.at[row_index, 'Status'], 'DRAFT')
+        self.assertFalse(self.service.checklist_df.at[row_index, 'Manually_Edited']) # New assertion
         
         self.mock_runner_instance.session_service.get_session.assert_called_once()
         self.mock_runner_instance.session_service.create_session.assert_called_once()
 
-    def test_analyze_row_no_target_pdfs(self):
-        self.service.target_pdf_uris = [] # Clear target PDFs
+    def test_analyze_row_no_target_documents(self):
+        self.service.target_doc_info = [] # Clear target documents
         row_index = 0
         question = "Is X compliant?"
         result = self.service.analyze_row(row_index, question)
@@ -142,8 +146,8 @@ class TestComplianceServiceIntegration(unittest.TestCase):
         self.mock_runner_instance.session_service.get_session.assert_called_once()
         self.mock_runner_instance.session_service.create_session.assert_called_once()
 
-    def test_chat_with_row_no_target_pdfs(self):
-        self.service.target_pdf_uris = [] # Clear target PDFs
+    def test_chat_with_row_no_target_documents(self):
+        self.service.target_doc_info = [] # Clear target documents
         row_index = 0
         user_message = "Tell me more about X."
         response = self.service.chat_with_row(row_index, user_message)
@@ -151,86 +155,72 @@ class TestComplianceServiceIntegration(unittest.TestCase):
         self.assertIn("No target documents loaded", response)
         self.mock_runner_instance.run.assert_not_called()
 
-    @patch('services.compliance_service.time.sleep')
-    @patch('services.compliance_service.ComplianceService.analyze_row')
-    def test_batch_analyze_success(self, mock_analyze_row, mock_sleep):
-        # Configure mock_analyze_row to return structured response for each call
-        mock_analyze_row.side_effect = [
-            """
-            **RISPOSTA:** Sì
-            **CONFIDENZA:** 90%
-            **GIUSTIFICAZIONE:** Compliance found for Q1.
-            """,
-            """
-            **RISPOSTA:** No
-            **CONFIDENZA:** 50%
-            **GIUSTIFICAZIONE:** Non-compliance for Q2.
-            """
-        ]
-        
-        # Since analyze_row is mocked, we need to manually simulate df updates
-        def mock_analyze_row_side_effect(row_idx, question):
-            if row_idx == 0:
-                self.service.checklist_df.at[0, 'Risposta'] = 'Sì'
-                self.service.checklist_df.at[0, 'Confidenza'] = 90
-                self.service.checklist_df.at[0, 'Giustificazione'] = 'Compliance found for Q1.'
-                self.service.checklist_df.at[0, 'Status'] = 'DRAFT'
-            elif row_idx == 1:
-                self.service.checklist_df.at[1, 'Risposta'] = 'No'
-                self.service.checklist_df.at[1, 'Confidenza'] = 50
-                self.service.checklist_df.at[1, 'Giustificazione'] = 'Non-compliance for Q2.'
-                self.service.checklist_df.at[1, 'Status'] = 'DRAFT'
-            return "Mocked raw response"
-
-        mock_analyze_row.side_effect = mock_analyze_row_side_effect
-
-        result = self.service.batch_analyze(max_items=2)
-
-        self.assertEqual(result['total_processed'], 2)
-        self.assertEqual(mock_analyze_row.call_count, 2)
-        # Check if sleep was called between items
-        mock_sleep.assert_called_once_with(2) 
-
-        # Verify final DataFrame state
-        self.assertEqual(self.service.checklist_df.at[0, 'Risposta'], 'Sì')
-        self.assertEqual(self.service.checklist_df.at[1, 'Risposta'], 'No')
-        self.assertEqual(self.service.checklist_df.at[0, 'Status'], 'DRAFT')
-        self.assertEqual(self.service.checklist_df.at[1, 'Status'], 'DRAFT')
-
-    def test_batch_analyze_no_checklist(self):
-        self.service.checklist_df = None
-        result = self.service.batch_analyze(max_items=1)
-        self.assertIn("No checklist loaded", result['error'])
-        self.mock_runner_instance.run.assert_not_called()
-
-    def test_batch_analyze_no_pdf(self):
-        self.service.target_pdf_uris = []
-        result = self.service.batch_analyze(max_items=1)
-        self.assertIn("No PDF loaded", result['error'])
-        self.mock_runner_instance.run.assert_not_called()
-
-    @patch('services.compliance_service.time.sleep')
-    @patch('services.compliance_service.ComplianceService.analyze_row')
-    def test_batch_analyze_skips_processed(self, mock_analyze_row, mock_sleep):
-        self.service.checklist_df.at[0, 'Status'] = 'APPROVED' # Mark first item as processed
-
-        def mock_analyze_row_side_effect(row_idx, question):
-            self.service.checklist_df.at[row_idx, 'Risposta'] = 'Answer'
-            self.service.checklist_df.at[row_idx, 'Status'] = 'DRAFT'
-            return "Mocked raw response"
-        mock_analyze_row.side_effect = mock_analyze_row_side_effect
-
-
-        result = self.service.batch_analyze(max_items=2)
-
-        self.assertEqual(result['total_processed'], 1) # Only second item should be processed
-        self.assertEqual(mock_analyze_row.call_count, 1) # analyze_row called only once
-        # Should be called for row 1
-        self.assertEqual(self.service.checklist_df.at[0, 'Status'], 'APPROVED') # First item untouched
-        self.assertEqual(self.service.checklist_df.at[1, 'Status'], 'DRAFT') # Second item processed
-        mock_analyze_row.assert_called_once_with(1, 'Is Y compliant?')
-        mock_sleep.assert_not_called() # Only one item processed, no delay needed
-
+        @patch('services.compliance_service.ComplianceService._process_single_row')
+        def test_batch_analyze_success(self, mock_process_single_row):
+            # Configure mock_process_single_row to return structured response for each call
+            def mock_process_single_row_side_effect(row_idx, question):
+                if row_idx == 0:
+                    return {'risposta': 'Sì', 'confidenza': 90, 'giustificazione': 'Compliance found for Q1.'}
+                elif row_idx == 1:
+                    return {'risposta': 'No', 'confidenza': 50, 'giustificazione': 'Non-compliance for Q2.'}
+                return {'risposta': '?', 'confidenza': 0, 'giustificazione': 'Error.'}
+    
+            mock_process_single_row.side_effect = mock_process_single_row_side_effect
+    
+            # Call batch_analyze with specific row indices
+            results_generator = self.service.batch_analyze(row_indices=[0, 1], concurrency=2)
+            processed_results = list(results_generator) # Consume the generator
+    
+            self.assertEqual(len(processed_results), 2)
+            self.assertEqual(mock_process_single_row.call_count, 2)
+    
+            # Verify final DataFrame state (implicitly updated by service.batch_analyze calling _process_single_row)
+            self.assertEqual(self.service.checklist_df.at[0, 'Risposta'], 'Sì')
+            self.assertEqual(self.service.checklist_df.at[0, 'Original_Risposta'], 'Sì')
+            self.assertEqual(self.service.checklist_df.at[1, 'Risposta'], 'No')
+            self.assertEqual(self.service.checklist_df.at[1, 'Original_Risposta'], 'No')
+            self.assertEqual(self.service.checklist_df.at[0, 'Status'], 'DRAFT')
+            self.assertEqual(self.service.checklist_df.at[1, 'Status'], 'DRAFT')
+            self.assertFalse(self.service.checklist_df.at[0, 'Manually_Edited'])
+            self.assertFalse(self.service.checklist_df.at[1, 'Manually_Edited'])
+    
+    
+        def test_batch_analyze_no_checklist(self):
+            self.service.checklist_df = None
+            results_generator = self.service.batch_analyze(row_indices=[0]) # Pass row_indices
+            result = next(results_generator) # Consume first item
+            self.assertIn("No checklist loaded", result['error'])
+            self.mock_runner_instance.run.assert_not_called()
+    
+        def test_batch_analyze_no_target_documents(self):
+            self.service.target_doc_info = [] # Clear target documents
+            results_generator = self.service.batch_analyze(row_indices=[0]) # Pass row_indices
+            result = next(results_generator) # Consume first item
+            self.assertIn("No target documents loaded", result['error'])
+            self.mock_runner_instance.run.assert_not_called()
+    
+        @patch('services.compliance_service.ComplianceService._process_single_row')
+        def test_batch_analyze_skips_processed(self, mock_process_single_row):
+            self.service.checklist_df.at[0, 'Status'] = 'APPROVED' # Mark first item as processed
+    
+            def mock_process_single_row_side_effect(row_idx, question):
+                return {'risposta': 'Answer', 'confidenza': 80, 'giustificazione': 'Mocked Justification'}
+            mock_process_single_row.side_effect = mock_process_single_row_side_effect
+    
+            # Call batch_analyze with specific row indices, including the processed one
+            results_generator = self.service.batch_analyze(row_indices=[0, 1], concurrency=1)
+            processed_results = list(results_generator) # Consume the generator
+    
+            self.assertEqual(len(processed_results), 1) # Only one item should be processed (row 1)
+            self.assertEqual(mock_process_single_row.call_count, 1) # _process_single_row called only once
+            
+            # Verify it was called for row 1
+            mock_process_single_row.assert_called_once_with(1, 'Is Y compliant?')
+            
+            # Verify final DataFrame state
+            self.assertEqual(self.service.checklist_df.at[0, 'Status'], 'APPROVED') # First item untouched
+            self.assertEqual(self.service.checklist_df.at[1, 'Status'], 'DRAFT') # Second item processed
+            self.assertFalse(self.service.checklist_df.at[1, 'Manually_Edited'])
 
 if __name__ == '__main__':
     unittest.main()

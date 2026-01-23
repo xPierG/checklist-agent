@@ -10,7 +10,7 @@ from google.adk.sessions import InMemorySessionService
 from google.genai import types
 
 from agents.orchestrator import create_orchestrator_agent
-from utils.pdf_loader import PDFLoader
+from utils.document_loader import DocumentLoaderFactory
 from utils.logger import logger
 
 # Load environment variables
@@ -33,7 +33,7 @@ class ComplianceService:
             self.client = Client() # ADC will handle authentication
         else:
             raise ValueError(f"Unsupported authentication mode: {auth_mode}")
-        self.pdf_loader = PDFLoader(self.client)
+        self.document_loader_factory = DocumentLoaderFactory(self.client)
         
         # ADK Setup
         logger.info("Setting up ADK agents")
@@ -43,54 +43,56 @@ class ComplianceService:
         
         # State
         self.checklist_df = None
-        self.context_pdf_uris = []  # Regulations, policies (the rules)
-        self.target_pdf_uris = []   # Documents to analyze (content to verify)
+        self.context_doc_info = []  # Regulations, policies (the rules)
+        self.target_doc_info = []   # Documents to analyze (content to verify)
         self.current_session_id = None
         
         logger.success("ComplianceService initialized successfully")
 
-    def load_context_pdf(self, file_path: str) -> str:
+    def load_context_document(self, file_path: str) -> str:
         """
-        Uploads a CONTEXT PDF (regulation/policy) and returns URI.
+        Uploads a CONTEXT document (regulation/policy) and returns URI.
         These are the documents that define the rules.
         """
         filename = os.path.basename(file_path)
-        logger.info(f"Loading CONTEXT PDF: {filename}")
+        logger.info(f"Loading CONTEXT document: {filename}")
         try:
-            pdf_uri = self.pdf_loader.upload_and_cache(file_path)
-            self.context_pdf_uris.append({"filename": filename, "uri": pdf_uri})
-            logger.success(f"Context PDF uploaded", f"File: {filename}, URI: {pdf_uri} (Total context: {len(self.context_pdf_uris)})")
-            return pdf_uri
+            loader = self.document_loader_factory.get_loader(file_path)
+            doc_uri = loader.load_document(file_path)
+            self.context_doc_info.append({"filename": filename, "uri": doc_uri})
+            logger.success(f"Context document uploaded", f"File: {filename}, URI: {doc_uri} (Total context: {len(self.context_doc_info)})")
+            return doc_uri
         except Exception as e:
-            logger.error(f"Failed to upload context PDF", str(e))
+            logger.error(f"Failed to upload context document", str(e))
             raise
     
-    def load_target_pdf(self, file_path: str) -> str:
+    def load_target_document(self, file_path: str) -> str:
         """
-        Uploads a TARGET PDF (document to analyze) and returns URI.
+        Uploads a TARGET document (document to analyze) and returns URI.
         These are the documents to verify against the rules.
         """
         filename = os.path.basename(file_path)
-        logger.info(f"Loading TARGET PDF: {filename}")
+        logger.info(f"Loading TARGET document: {filename}")
         try:
-            pdf_uri = self.pdf_loader.upload_and_cache(file_path)
-            self.target_pdf_uris.append({"filename": filename, "uri": pdf_uri})
-            logger.success(f"Target PDF uploaded", f"File: {filename}, URI: {pdf_uri} (Total target: {len(self.target_pdf_uris)})")
-            return pdf_uri
+            loader = self.document_loader_factory.get_loader(file_path)
+            doc_uri = loader.load_document(file_path)
+            self.target_doc_info.append({"filename": filename, "uri": doc_uri})
+            logger.success(f"Target document uploaded", f"File: {filename}, URI: {doc_uri} (Total target: {len(self.target_doc_info)})")
+            return doc_uri
         except Exception as e:
-            logger.error(f"Failed to upload target PDF", str(e))
+            logger.error(f"Failed to upload target document", str(e))
             raise
     
     @property
-    def pdf_uri(self):
-        """Backward compatibility: return first target PDF URI or None."""
-        return self.target_pdf_uris[0]['uri'] if self.target_pdf_uris else None
+    def document_uri(self):
+        """Backward compatibility: return first target document URI or None."""
+        return self.target_doc_info[0]['uri'] if self.target_doc_info else None
     
     @property
-    def pdf_uris(self):
-        """Backward compatibility: return all PDFs (context + target)."""
+    def document_uris(self):
+        """Backward compatibility: return all documents (context + target)."""
         # This returns a list of dictionaries
-        return self.context_pdf_uris + self.target_pdf_uris
+        return self.context_doc_info + self.target_doc_info
 
     def load_checklist(self, file_path: str) -> pd.DataFrame:
         """
@@ -161,9 +163,11 @@ class ComplianceService:
         # Add status columns if missing - UPDATED for structured responses
         required_cols = {
             'Risposta': '',           # Sì/No/Parziale/?
+            'Original_Risposta': '',  # Stores the original AI-generated answer for comparison
             'Confidenza': 0,          # 0-100 (int)
             'Giustificazione': '',    # Full justification
             'Status': 'PENDING',      # PENDING/DRAFT/APPROVED
+            'Manually_Edited': False, # Flag to track if the response was manually edited
             'Discussion_Log': ''      # Chat history
         }
         
@@ -195,69 +199,85 @@ class ComplianceService:
             return val if val != "nan" else ""
         return ""
 
-    def batch_analyze(self, max_items: int = 3) -> Dict[str, Any]:
+    def batch_analyze(self, row_indices: List[int] = None, concurrency: int = 3):
         """
-        Analyzes the first N items in the checklist in batch.
-        Returns a summary of results.
+        Analyzes items in the checklist in batch, using parallel execution.
+        Yields results as they complete.
         """
-        logger.info(f"Starting batch analysis", f"Max items: {max_items}")
+        import concurrent.futures
+        
+        logger.info(f"Starting batch analysis", f"Concurrency: {concurrency}, Specific rows: {len(row_indices) if row_indices else 'All pending'}")
         
         if self.checklist_df is None:
             logger.error("Batch analysis failed: No checklist loaded")
-            return {"error": "No checklist loaded"}
+            yield {"error": "No checklist loaded"}
+            return
         
-        if not self.pdf_uri:
-            logger.error("Batch analysis failed: No PDF loaded")
-            return {"error": "No PDF loaded"}
+        if not self.target_doc_info:
+            logger.error("Batch analysis failed: No target documents loaded")
+            yield {"error": "No target documents loaded"}
+            return
         
-        results = []
-        total_items = min(max_items, len(self.checklist_df))
-        logger.info(f"Processing {total_items} items")
+        # Determine which indices to process
+        if row_indices:
+            # Filter provided indices to include only pending ones
+            indices_to_process = [
+                idx for idx in row_indices 
+                if 0 <= idx < len(self.checklist_df) and self.checklist_df.at[idx, 'Status'] in ['PENDING', '']
+            ]
+        else:
+            # Process all pending if no specific indices are given
+            indices_to_process = [
+                idx for idx in range(len(self.checklist_df)) 
+                if self.checklist_df.at[idx, 'Status'] in ['PENDING', '']
+            ]
         
-        for idx in range(total_items):
-            # Skip if already processed
-            if self.checklist_df.at[idx, 'Status'] not in ['PENDING', '']:
-                logger.info(f"Skipping item {idx}", "Already processed")
-                continue
-                
-            question = self.get_question_from_row(idx)
-            item_id = self.checklist_df.at[idx, self.id_column] if self.id_column else str(idx)
-            
-            logger.info(f"Analyzing item {item_id}", question[:100])
-            
+        total_items_to_process = len(indices_to_process)
+        logger.info(f"Processing {total_items_to_process} items in parallel")
+        
+        if total_items_to_process == 0:
+            yield {"status": "info", "message": "No pending items to process."}
+            return
+
+        # Helper to run safely in thread and return index + result
+        def _threaded_worker(idx):
+            q = self.get_question_from_row(idx)
+            i_id = self.checklist_df.at[idx, self.id_column] if self.id_column else str(idx)
             try:
-                response = self.analyze_row(idx, question)
-                results.append({
-                    "index": idx,
-                    "id": item_id,
-                    "question": question,
-                    "response": response,
-                    "status": "success"
-                })
-                logger.success(f"Item {item_id} analyzed successfully")
-                
-                # Add delay between items to avoid rate limiting
-                if idx < total_items - 1:  # Don't delay after last item
-                    logger.info("Waiting 2s to avoid rate limiting")
-                    time.sleep(2)
-                    
+                # Use the pure processing method (no side effects on DF)
+                res = self._process_single_row(idx, q)
+                return {"index": idx, "id": i_id, "question": q, "result": res, "status": "success"}
             except Exception as e:
-                logger.error(f"Failed to analyze item {item_id}", str(e))
-                results.append({
-                    "index": idx,
-                    "id": item_id,
-                    "question": question,
-                    "error": str(e),
-                    "status": "error"
-                })
+                return {"index": idx, "id": i_id, "question": q, "error": str(e), "status": "error"}
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as executor:
+            future_to_idx = {executor.submit(_threaded_worker, idx): idx for idx in indices_to_process}
+            
+            for future in concurrent.futures.as_completed(future_to_idx):
+                idx = future_to_idx[future]
+                try:
+                    data = future.result()
+                    
+                    # Update DataFrame in Main Thread (Safe)
+                    if data["status"] == "success":
+                        parsed = data["result"]
+                        self.checklist_df.at[idx, 'Risposta'] = parsed['risposta']
+                        self.checklist_df.at[idx, 'Original_Risposta'] = parsed['risposta'] # Store original AI answer
+                        self.checklist_df.at[idx, 'Confidenza'] = parsed['confidenza']
+                        self.checklist_df.at[idx, 'Giustificazione'] = parsed['giustificazione']
+                        self.checklist_df.at[idx, 'Status'] = 'DRAFT'
+                        self.checklist_df.at[idx, 'Manually_Edited'] = False # Reset edit flag
+                        logger.success(f"Item analyzed (Thread result)", f"ID: {data['id']}")
+                        yield {"status": "success", "index": idx, "data": parsed}
+                    else:
+                        logger.error(f"Item analysis failed (Thread result)", f"ID: {data['id']} - {data.get('error')}")
+                        yield {"status": "error", "index": idx, "error": data.get('error')}
+                except Exception as exc:
+                    logger.error(f"Thread execution failed for index {idx}", str(exc))
+                    yield {"status": "error", "index": idx, "error": str(exc)}
         
-        processed_count = len(results)
-        logger.success(f"Batch analysis complete", f"Processed {processed_count} items")
-        return {
-            "total_processed": processed_count,
-            "results": results
-        }
-    
+        logger.success(f"Batch analysis complete")
+
     def chat_with_row(self, row_index: int, user_message: str) -> str:
         """
         Chat about a specific checklist row.
@@ -265,15 +285,15 @@ class ComplianceService:
         """
         logger.info(f"Chat for row {row_index}", user_message[:100])
         
-        if not self.target_pdf_uris:
+        if not self.target_doc_info:
             return "⚠️ No target documents loaded. Please upload documents to analyze."
         
         question = self.get_question_from_row(row_index)
         description = self.get_description_from_row(row_index)
         
         # Build context for chat
-        context_docs = "\n".join([f'  - Filename: "{doc["filename"]}", URI: "{doc["uri"]}"' for doc in self.context_pdf_uris]) if self.context_pdf_uris else "  (None)"
-        target_docs = "\n".join([f'  - Filename: "{doc["filename"]}", URI: "{doc["uri"]}"' for doc in self.target_pdf_uris])
+        context_docs = "\n".join([f'  - Filename: "{doc["filename"]}", URI: "{doc["uri"]}"' for doc in self.context_doc_info]) if self.context_doc_info else "  (None)"
+        target_docs = "\n".join([f'  - Filename: "{doc["filename"]}", URI: "{doc["uri"]}"' for doc in self.target_doc_info])
         
         # Get current analysis if available
         current_analysis = ""
@@ -366,8 +386,8 @@ Be conversational and helpful. If you need to search the documents, do so and pr
                 user_id=user_id, 
                 session_id=session_id,
                 state={
-                    "context_pdf_info": self.context_pdf_uris, # pass list of dicts
-                    "target_pdf_info": self.target_pdf_uris  # pass list of dicts
+                    "context_pdf_info": self.context_doc_info, # pass list of dicts
+                    "target_pdf_info": self.target_doc_info  # pass list of dicts
                 }
             ))
 
@@ -404,25 +424,26 @@ Be conversational and helpful. If you need to search the documents, do so and pr
         
         return result
 
-    def analyze_row(self, row_index: int, question: str) -> str:
+    def _process_single_row(self, row_index: int, question: str) -> dict:
         """
-        Runs the agent on a specific row.
+        Internal pure method to run analysis for a single row.
+        Does NOT modify shared state (checklist_df).
+        Returns parsed result dictionary.
         """
-        logger.info(f"Analyzing row {row_index}", question[:100])
         description = self.get_description_from_row(row_index)
         
-        if not self.target_pdf_uris:
-            logger.error("Analysis failed: No target PDFs loaded")
-            return "Error: No target documents loaded. Please upload documents to analyze."
+        if not self.target_doc_info:
+            raise ValueError("No target documents loaded")
 
         user_id = "user_default"
         session_id = f"session_row_{row_index}"
         
+        # Ensure session exists (this part manages ADK session state, which is thread-safe per session_id)
         self._get_or_create_session(user_id, session_id)
 
-        # Construct prompt with context and target documents
-        context_docs = "\n".join([f'  - Filename: "{doc["filename"]}", URI: "{doc["uri"]}"' for doc in self.context_pdf_uris]) if self.context_pdf_uris else "  (None - analyzing without regulatory context)"
-        target_docs = "\n".join([f'  - Filename: "{doc["filename"]}", URI: "{doc["uri"]}"' for doc in self.target_pdf_uris])
+        # Construct prompt
+        context_docs = "\n".join([f'  - Filename: "{doc["filename"]}", URI: "{doc["uri"]}"' for doc in self.context_doc_info]) if self.context_doc_info else "  (None - analyzing without regulatory context)"
+        target_docs = "\n".join([f'  - Filename: "{doc["filename"]}", URI: "{doc["uri"]}"' for doc in self.target_doc_info])
         
         prompt = f"""
         You are analyzing TARGET documents for compliance. 
@@ -446,7 +467,7 @@ Be conversational and helpful. If you need to search the documents, do so and pr
         
         content = types.Content(role='user', parts=[types.Part(text=prompt)])
         
-        # Run Synchronously
+        # Run Synchronously (this thread will block here waiting for API)
         events = self.runner.run(
             user_id=user_id, 
             session_id=session_id, 
@@ -457,48 +478,51 @@ Be conversational and helpful. If you need to search the documents, do so and pr
         current_agent = None
         
         for event in events:
-            # Log content from agents
             if event.content and event.content.parts:
                 try:
                     text = event.content.parts[0].text
                     if text:
                         author = getattr(event, 'author', 'unknown')
-                        
-                        # Detect agent changes and log clearly
+                        # Logging in threads can be interleaved, but Logger is thread-safe enough for now
                         if author != current_agent and author != 'user':
                             current_agent = author
-                            
                             if 'Librarian' in author or 'librarian' in author.lower():
-                                logger.info("=" * 80)
-                                logger.info("📚 LIBRARIAN CHIAMATO")
-                                logger.info("=" * 80)
-                                logger.info(f"OUTPUT LIBRARIAN:\n{text}")
-                                logger.info("=" * 80)
+                                logger.info(f"[Row {row_index}] 📚 LIBRARIAN OUTPUT:\n{text[:200]}...")
                             elif 'Auditor' in author or 'auditor' in author.lower():
-                                logger.info("=" * 80)
-                                logger.info("⚖️ AUDITOR CHIAMATO")
-                                logger.info("=" * 80)
-                                logger.info(f"OUTPUT AUDITOR:\n{text}")
-                                logger.info("=" * 80)
+                                logger.info(f"[Row {row_index}] ⚖️ AUDITOR OUTPUT:\n{text[:200]}...")
                 except Exception:
                     pass
 
             if event.is_final_response() and event.content:
                 final_response = event.content.parts[0].text
-                logger.success(f"✅ Risposta finale ricevuta: {final_response[:100]}...")
         
         # Parse structured response
-        parsed = self._parse_response(final_response)
+        return self._parse_response(final_response)
+
+    def analyze_row(self, row_index: int, question: str) -> str:
+        """
+        Runs the agent on a specific row (Single Thread Wrapper).
+        Updates shared state.
+        """
+        logger.info(f"Analyzing row {row_index}", question[:100])
         
-        # Update DataFrame with structured fields
-        self.checklist_df.at[row_index, 'Risposta'] = parsed['risposta']
-        self.checklist_df.at[row_index, 'Confidenza'] = parsed['confidenza']
-        self.checklist_df.at[row_index, 'Giustificazione'] = parsed['giustificazione']
-        self.checklist_df.at[row_index, 'Status'] = 'DRAFT'
-        
-        logger.success(f"Row {row_index} analyzed", f"Answer: {parsed['risposta']}, Confidence: {parsed['confidenza']}")
-        
-        return final_response
+        try:
+            parsed = self._process_single_row(row_index, question)
+            
+            # Update DataFrame
+            self.checklist_df.at[row_index, 'Risposta'] = parsed['risposta']
+            self.checklist_df.at[row_index, 'Original_Risposta'] = parsed['risposta'] # Store original AI answer
+            self.checklist_df.at[row_index, 'Confidenza'] = parsed['confidenza']
+            self.checklist_df.at[row_index, 'Giustificazione'] = parsed['giustificazione']
+            self.checklist_df.at[row_index, 'Status'] = 'DRAFT'
+            self.checklist_df.at[row_index, 'Manually_Edited'] = False # Reset edit flag
+            
+            logger.success(f"Row {row_index} analyzed", f"Answer: {parsed['risposta']}, Confidence: {parsed['confidenza']}")
+            return parsed['giustificazione'] # Return text for backward compatibility
+            
+        except Exception as e:
+            logger.error(f"Analysis failed for row {row_index}", str(e))
+            return f"Error: {str(e)}"
 
     def get_dataframe(self) -> pd.DataFrame:
         return self.checklist_df

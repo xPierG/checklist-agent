@@ -8,10 +8,12 @@ The Checklist Agent works with **three types of documents**:
 ### 1. 📚 Context Documents (Regulations/Policies)
 **Purpose**: Define the rules and compliance requirements
 
+**Supported File Types**: PDF, DOCX, TXT
+
 **Examples**:
-- GDPR regulation
-- ISO 27001 standard
-- Company security policy
+- GDPR regulation (PDF)
+- ISO 27001 standard (DOCX)
+- Company security policy (TXT)
 - Industry best practices
 
 **Upload**: In sidebar under "Context Documents"
@@ -28,19 +30,23 @@ The Checklist Agent works with **three types of documents**:
 
 **Note**: Rows where the Question is empty will be automatically filtered out.
 
-**Auto-Generated Columns** (added by AI):
-- `🤖 Risposta AI`: Direct answer to the question
-- `🤖 Confidenza Risposta`: Confidence score (0-100%)
-- `🤖 Spiegazione`: Detailed justification with text snippets
-- `📊 Status`: PENDING → DRAFT → APPROVED/REJECTED
+**Auto-Generated Columns** (added by AI, can be manually edited):
+- `Risposta`: Direct answer to the question (AI-generated, editable)
+- `Original_Risposta`: The initial AI-generated answer (read-only, for comparison)
+- `Confidenza`: Confidence score (0-100%)
+- `Spiegazione`: Detailed justification with text snippets (AI-generated, editable)
+- `Status`: PENDING → DRAFT → APPROVED/REJECTED
+- `Manually_Edited`: Boolean flag, `True` if `Risposta` or `Spiegazione` has been manually changed.
 - `Discussion_Log`: Chat history for each item
 
 ### 3. 📄 Target Documents (To Analyze)
 **Purpose**: The actual content being verified for compliance
 
+**Supported File Types**: PDF, DOCX, TXT
+
 **Examples**:
-- Company privacy manual
-- Security procedures document
+- Company privacy manual (PDF)
+- Security procedures document (DOCX)
 - Data processing records
 - Internal policies
 
