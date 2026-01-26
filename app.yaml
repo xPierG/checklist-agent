@@ -1,0 +1,20 @@
+# Cloud Run Service Configuration (Example)
+# Copy this file and replace placeholders with your actual values.
+
+# Specify the container image to deploy
+image: <YOUR_GCP_REGION>-docker.pkg.dev/<YOUR_PROJECT_ID>/checklist-agent-repo/checklist-agent:latest
+
+# Define the environment as "Flexible"
+env: flex
+
+# Define environment variables for the application
+env_variables:
+  AUTH_MODE: 'ADC'
+  GCP_PROJECT_ID: '<YOUR_PROJECT_ID>'
+  GCP_REGION: '<YOUR_GCP_REGION>'
+
+# Assign resources for the instance
+resources:
+  cpu: 1
+  memory_gb: 2
+  disk_size_gb: 10
